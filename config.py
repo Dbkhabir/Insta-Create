@@ -9,7 +9,9 @@ from typing import Optional
 
 # Railway/Production environment detection
 IS_RAILWAY = os.getenv('RAILWAY_ENVIRONMENT') is not None
-IS_PRODUCTION = os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('DYNO') or os.getenv('RENDER')
+IS_HEROKU = os.getenv('DYNO') is not None
+IS_RENDER = os.getenv('RENDER') is not None
+IS_PRODUCTION = IS_RAILWAY or IS_HEROKU or IS_RENDER
 
 # Load .env only in local development
 if not IS_PRODUCTION:
@@ -18,7 +20,9 @@ if not IS_PRODUCTION:
         load_dotenv()
         print("✅ .env file loaded (local development)")
     except ImportError:
-        print("⚠️ python-dotenv not installed (production mode)")
+        print("⚠️ python-dotenv not installed")
+    except Exception as e:
+        print(f"⚠️ Could not load .env: {e}")
 else:
     print("✅ Running in production mode (Railway/Heroku/Render)")
 
@@ -91,27 +95,41 @@ class Config:
     
     @classmethod
     def validate(cls) -> bool:
-        """Validate configuration settings."""
+        """
+        Validate configuration settings.
+        
+        Returns:
+            bool: True if configuration is valid
+            
+        Raises:
+            ValueError: If required configuration is missing
+        """
         if not cls.TELEGRAM_BOT_TOKEN:
             error_msg = (
-                "\n❌ TELEGRAM_BOT_TOKEN is required!\n"
-                "\n📝 Railway Setup:"
-                "\n1. Go to your Railway project"
-                "\n2. Click 'Variables' tab"
-                "\n3. Click 'New Variable'"
-                "\n4. Add: TELEGRAM_BOT_TOKEN = your_bot_token"
-                "\n"
-                "\n🤖 Get Token from @BotFather on Telegram"
+                "\n" + "="*60 + "\n"
+                "❌ TELEGRAM_BOT_TOKEN is required!\n"
+                "\n📝 Railway Setup Instructions:\n"
+                "1. Go to https://railway.app/dashboard\n"
+                "2. Select your project\n"
+                "3. Click 'Variables' tab\n"
+                "4. Click 'New Variable'\n"
+                "5. Add:\n"
+                "   Variable: TELEGRAM_BOT_TOKEN\n"
+                "   Value: <your_bot_token_from_@BotFather>\n"
+                "\n🤖 How to get Bot Token:\n"
+                "1. Open Telegram\n"
+                "2. Search for @BotFather\n"
+                "3. Send /newbot\n"
+                "4. Follow instructions\n"
+                "5. Copy the token\n"
+                "\n🔄 After adding variable:\n"
+                "   Railway will automatically redeploy\n"
+                "="*60
             )
             raise ValueError(error_msg)
         
         if cls.MAX_ACCOUNTS > 50:
             logging.warning("MAX_ACCOUNTS exceeds recommended limit of 50")
-        
-        print(f"✅ Configuration validated")
-        print(f"   Environment: {'Production' if IS_PRODUCTION else 'Local'}")
-        print(f"   Headless Mode: {cls.HEADLESS_MODE}")
-        print(f"   Temp Dir: {cls.TEMP_DIR}")
         
         return True
     
@@ -132,10 +150,9 @@ class Config:
         logging.basicConfig(
             level=getattr(logging, cls.LOG_LEVEL.upper()),
             format=log_format,
-            handlers=handlers
+            handlers=handlers,
+            force=True  # Override any existing configuration
         )
-        
-        print(f"✅ Logging configured (Level: {cls.LOG_LEVEL})")
     
     @classmethod
     def create_directories(cls) -> None:
@@ -143,15 +160,20 @@ class Config:
         try:
             os.makedirs(cls.TEMP_DIR, exist_ok=True)
             os.makedirs(cls.AVATARS_DIR, exist_ok=True)
-            print(f"✅ Directories created")
         except Exception as e:
-            print(f"⚠️ Could not create directories: {e}")
+            logging.warning(f"Could not create directories: {e}")
 
 
-# Setup (but don't validate yet - will validate in main)
+# ⚠️ IMPORTANT: Do NOT validate on import!
+# Validation will happen in bot.py main() function
+
+# Only setup logging and create directories
 Config.setup_logging()
 Config.create_directories()
 
-print("="*50)
-print("Instagram Account Creator Bot - Config Loaded")
-print("="*50)
+# Print configuration info (but don't validate yet)
+print("="*60)
+print("Instagram Account Creator Bot - Config Module Loaded")
+print(f"Environment: {'Production' if IS_PRODUCTION else 'Local'}")
+print(f"Token Present: {'Yes' if Config.TELEGRAM_BOT_TOKEN else 'No'}")
+print("="*60)
