@@ -1,0 +1,15 @@
+python-telegram-bot==20.7
+selenium==4.16.0
+undetected-chromedriver==3.5.4
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.4
+pyotp==2.9.0
+Pillow==10.1.0
+cryptography==41.0.7
+aiohttp==3.9.1
+python-dotenv==1.0.0
+fake-useragent==1.4.0
+pyzbar==0.1.9
+qrcode==7.4.2
+opencv-python-headless==4.8.1.78
