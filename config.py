@@ -1,52 +1,37 @@
 """
-Configuration module for Instagram Account Creator Bot.
-Handles environment variables and global settings.
+Configuration for Instagram Account Creator Bot
+Railway Production Ready
 """
 
 import os
 import logging
-from typing import Optional
 
-# Railway/Production environment detection
-IS_RAILWAY = os.getenv('RAILWAY_ENVIRONMENT') is not None
-IS_HEROKU = os.getenv('DYNO') is not None
-IS_RENDER = os.getenv('RENDER') is not None
-IS_PRODUCTION = IS_RAILWAY or IS_HEROKU or IS_RENDER
-
-# Load .env only in local development
-if not IS_PRODUCTION:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-        print("✅ .env file loaded (local development)")
-    except ImportError:
-        print("⚠️ python-dotenv not installed")
-    except Exception as e:
-        print(f"⚠️ Could not load .env: {e}")
-else:
-    print("✅ Running in production mode (Railway/Heroku/Render)")
+# ====================================================================
+# 🔥 Bot Token (Configured)
+# ====================================================================
+BOT_TOKEN = "8751410316:AAHl_ERIaqzVGuA77tyVBIFuZG18s3E--ME"
 
 
 class Config:
     """Global configuration settings."""
     
-    # Telegram Configuration
-    TELEGRAM_BOT_TOKEN: str = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    # Token
+    TELEGRAM_BOT_TOKEN: str = BOT_TOKEN
     
     # Captcha Configuration
-    CAPTCHA_API_KEY: Optional[str] = os.getenv('CAPTCHA_API_KEY', None)
-    CAPTCHA_SERVICE: str = os.getenv('CAPTCHA_SERVICE', '2captcha')
+    CAPTCHA_API_KEY: str = ""
+    CAPTCHA_SERVICE: str = "2captcha"
     
     # Logging Configuration
-    LOG_LEVEL: str = os.getenv('LOG_LEVEL', 'INFO')
-    LOG_FILE: str = 'bot.log'
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "bot.log"
     
     # Retry Configuration
-    MAX_RETRIES: int = int(os.getenv('MAX_RETRIES', '3'))
-    RETRY_DELAY: int = int(os.getenv('RETRY_DELAY', '5'))
+    MAX_RETRIES: int = 3
+    RETRY_DELAY: int = 5
     
     # Instagram Configuration
-    INSTAGRAM_SIGNUP_URL: str = 'https://www.instagram.com/accounts/emailsignup/'
+    INSTAGRAM_SIGNUP_URL: str = "https://www.instagram.com/accounts/emailsignup/"
     INSTAGRAM_MIN_PASSWORD_LENGTH: int = 6
     
     # Email Provider Configuration
@@ -70,17 +55,13 @@ class Config:
     MAX_FIELD_DELAY: int = 5
     
     # Browser Configuration
-    HEADLESS_MODE: bool = os.getenv('HEADLESS_MODE', 'true').lower() == 'true'
+    HEADLESS_MODE: bool = True
     BROWSER_TIMEOUT: int = 30
     
-    # Railway specific: Force headless on production
-    if IS_PRODUCTION:
-        HEADLESS_MODE = True
-    
     # Storage Configuration
-    CREDENTIALS_FILE: str = 'credentials.json'
-    TEMP_DIR: str = '/tmp' if IS_PRODUCTION else 'temp'
-    AVATARS_DIR: str = '/tmp/avatars' if IS_PRODUCTION else 'avatars'
+    CREDENTIALS_FILE: str = "credentials.json"
+    TEMP_DIR: str = "/tmp"
+    AVATARS_DIR: str = "/tmp/avatars"
     
     # Birthday Configuration
     MIN_BIRTH_YEAR: int = 1990
@@ -94,58 +75,28 @@ class Config:
     ADD_PROFILE_PICTURE: bool = True
     
     @classmethod
-    def validate(cls) -> bool:
+    def validate(cls):
         """Validate configuration settings."""
         if not cls.TELEGRAM_BOT_TOKEN:
-            error_msg = (
-                "\n" + "="*60 + "\n"
-                "❌ TELEGRAM_BOT_TOKEN is required!\n"
-                "\n📝 Railway Setup Instructions:\n"
-                "1. Go to https://railway.app/dashboard\n"
-                "2. Select your project\n"
-                "3. Click 'Variables' tab\n"
-                "4. Click 'New Variable'\n"
-                "5. Add:\n"
-                "   Variable: TELEGRAM_BOT_TOKEN\n"
-                "   Value: <your_bot_token_from_@BotFather>\n"
-                "\n🤖 Get Token from @BotFather:\n"
-                "1. Open Telegram → Search @BotFather\n"
-                "2. Send: /newbot\n"
-                "3. Follow instructions\n"
-                "4. Copy the token (looks like: 1234567890:ABC...)\n"
-                "\n🔄 After adding variable in Railway:\n"
-                "   It will automatically redeploy\n"
-                "="*60
-            )
-            raise ValueError(error_msg)
+            raise ValueError("TELEGRAM_BOT_TOKEN is required!")
         
-        if cls.MAX_ACCOUNTS > 50:
-            logging.warning("MAX_ACCOUNTS exceeds recommended limit of 50")
-        
+        print(f"✅ Token configured: {cls.TELEGRAM_BOT_TOKEN[:25]}...")
         return True
     
     @classmethod
-    def setup_logging(cls) -> None:
+    def setup_logging(cls):
         """Configure logging for the application."""
         log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        
-        handlers = [logging.StreamHandler()]
-        
-        if not IS_PRODUCTION:
-            try:
-                handlers.append(logging.FileHandler(cls.LOG_FILE))
-            except:
-                pass
         
         logging.basicConfig(
             level=getattr(logging, cls.LOG_LEVEL.upper()),
             format=log_format,
-            handlers=handlers,
+            handlers=[logging.StreamHandler()],
             force=True
         )
     
     @classmethod
-    def create_directories(cls) -> None:
+    def create_directories(cls):
         """Create necessary directories if they don't exist."""
         try:
             os.makedirs(cls.TEMP_DIR, exist_ok=True)
@@ -154,18 +105,11 @@ class Config:
             logging.warning(f"Could not create directories: {e}")
 
 
-# ==========================================
-# ⚠️ DO NOT CALL validate() HERE!
-# ⚠️ Validation happens in bot.py main()
-# ==========================================
-
-# Only setup logging and directories
+# Setup configuration
 Config.setup_logging()
 Config.create_directories()
 
-# Print info
 print("="*60)
-print("Config Module Loaded")
-print(f"Environment: {'Production' if IS_PRODUCTION else 'Local'}")
-print(f"Token: {'✅ Present' if Config.TELEGRAM_BOT_TOKEN else '❌ Missing'}")
+print("✅ Config Module Loaded Successfully")
+print(f"✅ Bot Token: {BOT_TOKEN[:25]}...")
 print("="*60)
