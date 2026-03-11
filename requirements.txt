@@ -1,15 +1,34 @@
+# Telegram Bot
 python-telegram-bot==20.7
+
+# Web Automation
 selenium==4.16.0
 undetected-chromedriver==3.5.4
+
+# HTTP Requests
 requests==2.31.0
+aiohttp==3.9.1
+
+# HTML Parsing
 beautifulsoup4==4.12.2
 lxml==4.9.4
+
+# Security & Auth
 pyotp==2.9.0
-Pillow==10.1.0
 cryptography==41.0.7
-aiohttp==3.9.1
+
+# Image Processing
+Pillow==10.1.0
+
+# Environment Variables (only for local dev)
 python-dotenv==1.0.0
+
+# User Agents
 fake-useragent==1.4.0
+
+# QR Code
 pyzbar==0.1.9
 qrcode==7.4.2
+
+# Computer Vision (headless version for Railway)
 opencv-python-headless==4.8.1.78
