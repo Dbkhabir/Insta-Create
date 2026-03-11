@@ -95,15 +95,7 @@ class Config:
     
     @classmethod
     def validate(cls) -> bool:
-        """
-        Validate configuration settings.
-        
-        Returns:
-            bool: True if configuration is valid
-            
-        Raises:
-            ValueError: If required configuration is missing
-        """
+        """Validate configuration settings."""
         if not cls.TELEGRAM_BOT_TOKEN:
             error_msg = (
                 "\n" + "="*60 + "\n"
@@ -116,14 +108,13 @@ class Config:
                 "5. Add:\n"
                 "   Variable: TELEGRAM_BOT_TOKEN\n"
                 "   Value: <your_bot_token_from_@BotFather>\n"
-                "\n🤖 How to get Bot Token:\n"
-                "1. Open Telegram\n"
-                "2. Search for @BotFather\n"
-                "3. Send /newbot\n"
-                "4. Follow instructions\n"
-                "5. Copy the token\n"
-                "\n🔄 After adding variable:\n"
-                "   Railway will automatically redeploy\n"
+                "\n🤖 Get Token from @BotFather:\n"
+                "1. Open Telegram → Search @BotFather\n"
+                "2. Send: /newbot\n"
+                "3. Follow instructions\n"
+                "4. Copy the token (looks like: 1234567890:ABC...)\n"
+                "\n🔄 After adding variable in Railway:\n"
+                "   It will automatically redeploy\n"
                 "="*60
             )
             raise ValueError(error_msg)
@@ -140,7 +131,6 @@ class Config:
         
         handlers = [logging.StreamHandler()]
         
-        # Only create log file in local development
         if not IS_PRODUCTION:
             try:
                 handlers.append(logging.FileHandler(cls.LOG_FILE))
@@ -151,7 +141,7 @@ class Config:
             level=getattr(logging, cls.LOG_LEVEL.upper()),
             format=log_format,
             handlers=handlers,
-            force=True  # Override any existing configuration
+            force=True
         )
     
     @classmethod
@@ -164,16 +154,18 @@ class Config:
             logging.warning(f"Could not create directories: {e}")
 
 
-# ⚠️ IMPORTANT: Do NOT validate on import!
-# Validation will happen in bot.py main() function
+# ==========================================
+# ⚠️ DO NOT CALL validate() HERE!
+# ⚠️ Validation happens in bot.py main()
+# ==========================================
 
-# Only setup logging and create directories
+# Only setup logging and directories
 Config.setup_logging()
 Config.create_directories()
 
-# Print configuration info (but don't validate yet)
+# Print info
 print("="*60)
-print("Instagram Account Creator Bot - Config Module Loaded")
+print("Config Module Loaded")
 print(f"Environment: {'Production' if IS_PRODUCTION else 'Local'}")
-print(f"Token Present: {'Yes' if Config.TELEGRAM_BOT_TOKEN else 'No'}")
+print(f"Token: {'✅ Present' if Config.TELEGRAM_BOT_TOKEN else '❌ Missing'}")
 print("="*60)
