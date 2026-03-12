@@ -1,17 +1,18 @@
 """
 Instagram Account Creator Module.
-Playwright version - Production ready.
+Playwright version - All issues fixed.
 """
 
 import logging
 import time
 import random
 import os
-from typing import Optional, Dict, Any, Callable
+import json
+from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime
 
 from playwright.sync_api import (
-    sync_playwright, Page, BrowserContext,
+    sync_playwright, Page, BrowserContext, Browser,
     TimeoutError as PlaywrightTimeout
 )
 
@@ -27,6 +28,7 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 SIGNUP_URL = "https://www.instagram.com/accounts/emailsignup/"
+INSTAGRAM_HOME = "https://www.instagram.com/"
 
 
 class InstagramCreator:
@@ -47,7 +49,9 @@ class InstagramCreator:
         self.successful_accounts = []
         self.failed_accounts = []
 
-    # ==================== PUBLIC ====================
+    # ========================================================
+    # PUBLIC
+    # ========================================================
 
     def create_accounts(self) -> Dict[str, Any]:
         """Create multiple Instagram accounts."""
@@ -63,12 +67,14 @@ class InstagramCreator:
 
             logger.info(f"\n{'='*60}")
             logger.info(
-                f"ACCOUNT {self.current_account}/{self.config.num_accounts}"
+                f"ACCOUNT {self.current_account}/"
+                f"{self.config.num_accounts}"
             )
             logger.info(f"{'='*60}")
 
             self._send_progress(
-                f"📝 Account {self.current_account}/{self.config.num_accounts}...",
+                f"📝 Account {self.current_account}/"
+                f"{self.config.num_accounts}...",
                 pct,
                 account=self.current_account,
                 total=self.config.num_accounts
@@ -115,7 +121,9 @@ class InstagramCreator:
         self._send_progress("✨ Done!", 100)
         return summary
 
-    # ==================== PRIVATE ====================
+    # ========================================================
+    # PRIVATE - MAIN FLOW
+    # ========================================================
 
     def _create_single_account(self, index: int) -> Dict[str, Any]:
         """Create one Instagram account."""
@@ -124,17 +132,20 @@ class InstagramCreator:
             'success': False,
             'created_at': datetime.now().isoformat()
         }
-
         context = None
+        page = None
 
         try:
             # Step 1: Browser
             self._send_progress("🌐 Step 1: Browser init...")
+            logger.info("Step 1: Starting browser...")
             if not self._start_playwright():
                 raise Exception("Browser init failed")
+            logger.info("✅ Browser ready")
 
             # Step 2: Email
             self._send_progress("📧 Step 2: Creating email...")
+            logger.info("Step 2: Creating email...")
             email_data = self.email_manager.create_email_with_rotation()
             if not email_data:
                 raise Exception("Email creation failed")
@@ -144,55 +155,65 @@ class InstagramCreator:
 
             # Step 3: Details
             self._send_progress("🔧 Step 3: Generating details...")
+            logger.info("Step 3: Generating details...")
             username = self.config.get_username(index)
             fullname = self.config.get_fullname(index)
             password = self.config.get_password(index)
             data['username'] = username
             data['fullname'] = fullname
             data['password'] = password
-            logger.info(f"✅ User: {username} | Name: {fullname}")
+            logger.info(f"✅ Username: {username} | Name: {fullname}")
 
             # Step 4: New page
-            self._send_progress("🔗 Step 4: Opening Instagram...")
+            self._send_progress("🔗 Step 4: Opening browser...")
+            logger.info("Step 4: Creating page...")
             context, page = self._new_context_and_page()
 
-            # Step 5: Load signup page
-            self._send_progress("📄 Step 5: Loading signup page...")
+            # Step 5: Load signup
+            self._send_progress("📄 Step 5: Loading Instagram...")
+            logger.info("Step 5: Loading signup page...")
             if not self._load_signup_page(page):
                 raise Exception("Failed to load signup page")
+            logger.info("✅ Signup page loaded")
 
             # Step 6: Fill form
             self._send_progress("✍️ Step 6: Filling form...")
-            username = self._fill_form(
-                page, email_data['email'], fullname, username, password
+            logger.info("Step 6: Filling form...")
+            final_username = self._fill_form(
+                page, email_data['email'],
+                fullname, username, password
             )
-            if not username:
+            if not final_username:
                 raise Exception("Failed to fill signup form")
-            data['username'] = username
+            data['username'] = final_username
             logger.info("✅ Form filled")
 
             # Step 7: Submit
             self._send_progress("📤 Step 7: Submitting...")
+            logger.info("Step 7: Submitting form...")
             if not self._submit_form(page):
                 raise Exception("Failed to submit form")
             logger.info("✅ Submitted")
 
-            # Step 8: Verification code
+            # Step 8: Verification
             self._send_progress("📬 Step 8: Verification code...")
+            logger.info("Step 8: Getting verification code...")
             code = self._get_verification_code(email_data, page)
             if not code:
                 raise Exception("Verification code not received")
             logger.info(f"✅ Code: {code}")
 
             # Step 9: Birthday
-            self._send_progress("🎂 Step 9: Birthday...")
+            self._send_progress("🎂 Step 9: Setting birthday...")
+            logger.info("Step 9: Setting birthday...")
             if not self._handle_birthday(page):
                 raise Exception("Birthday setup failed")
             logger.info("✅ Birthday set")
 
             # Step 10: Finalize
             self._send_progress("✨ Step 10: Finalizing...")
-            self._finalize_account(page, username)
+            logger.info("Step 10: Finalizing...")
+            self._finalize_account(page, final_username)
 
             data['success'] = True
             data['status'] = 'active'
@@ -202,14 +223,15 @@ class InstagramCreator:
             return data
 
         except Exception as e:
-            logger.error(f"❌ ACCOUNT {self.current_account} FAILED: {e}")
+            logger.error(
+                f"❌ ACCOUNT {self.current_account} FAILED: {e}"
+            )
             import traceback
             traceback.print_exc()
             data['error'] = str(e)
 
-            # Debug screenshot
             try:
-                if 'page' in locals() and page:
+                if page:
                     page.screenshot(path='/tmp/error_final.png')
                     logger.info("Error screenshot saved")
             except Exception:
@@ -225,10 +247,14 @@ class InstagramCreator:
                 pass
             self._stop_playwright()
 
+    # ========================================================
+    # PRIVATE - BROWSER
+    # ========================================================
+
     def _start_playwright(self) -> bool:
         """Start Playwright browser."""
         try:
-            if self.playwright:
+            if self.playwright and self.browser:
                 return True
 
             logger.info("Starting Playwright...")
@@ -246,8 +272,9 @@ class InstagramCreator:
                     '--disable-blink-features=AutomationControlled',
                     '--disable-infobars',
                     '--window-size=1280,800',
+                    '--lang=en-US',
                 ],
-                slow_mo=100
+                slow_mo=50
             )
             logger.info("✅ Browser started")
             return True
@@ -272,7 +299,7 @@ class InstagramCreator:
             logger.error(f"Stop error: {e}")
 
     def _new_context_and_page(self):
-        """Create browser context and page."""
+        """Create browser context and page with stealth."""
         context = self.browser.new_context(
             viewport={'width': 1280, 'height': 800},
             user_agent=(
@@ -288,202 +315,253 @@ class InstagramCreator:
                     'text/html,application/xhtml+xml,'
                     'application/xml;q=0.9,image/webp,*/*;q=0.8'
                 ),
+                'sec-ch-ua': (
+                    '"Not_A Brand";v="8", '
+                    '"Chromium";v="120", '
+                    '"Google Chrome";v="120"'
+                ),
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
             }
         )
 
-        # Anti-detection script
+        # Anti-detection
         context.add_init_script("""
-            // webdriver flag remove
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             });
-
-            // plugins fake
             Object.defineProperty(navigator, 'plugins', {
-                get: () => {
-                    return [
-                        {name: 'Chrome PDF Plugin'},
-                        {name: 'Chrome PDF Viewer'},
-                        {name: 'Native Client'}
-                    ];
-                }
+                get: () => [
+                    {name: 'Chrome PDF Plugin'},
+                    {name: 'Chrome PDF Viewer'},
+                    {name: 'Native Client'}
+                ]
             });
-
-            // languages
             Object.defineProperty(navigator, 'languages', {
                 get: () => ['en-US', 'en']
             });
-
-            // chrome object
             window.chrome = {
                 runtime: {
                     connect: () => {},
                     sendMessage: () => {}
                 }
             };
-
-            // permissions
             const originalQuery = window.navigator.permissions.query;
             window.navigator.permissions.query = (parameters) => (
                 parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
+                    Promise.resolve({state: Notification.permission}) :
                     originalQuery(parameters)
             );
         """)
 
         page = context.new_page()
-
-        # Request interception - speed up
-        page.route(
-            "**/*.{png,jpg,jpeg,gif,svg,woff,woff2,ttf,otf}",
-            lambda route: route.abort()
-            if 'instagram' not in route.request.url
-            else route.continue_()
-        )
+        page.set_default_timeout(30000)
+        page.set_default_navigation_timeout(45000)
 
         return context, page
 
+    # ========================================================
+    # PRIVATE - PAGE LOADING
+    # ========================================================
+
     def _load_signup_page(self, page: Page) -> bool:
-        """Load Instagram signup page properly."""
+        """
+        Load Instagram signup page properly.
+        Handles React SPA, cookies, redirects.
+        """
         try:
-            logger.info(f"Loading: {SIGNUP_URL}")
+            # ===== Step A: Homepage visit =====
+            logger.info("A: Visiting Instagram homepage...")
+            try:
+                page.goto(
+                    INSTAGRAM_HOME,
+                    wait_until='domcontentloaded',
+                    timeout=45000
+                )
+                time.sleep(4)
+                logger.info(f"Homepage title: {page.title()}")
+                logger.info(f"Homepage URL: {page.url}")
+            except Exception as e:
+                logger.warning(f"Homepage load warning: {e}")
 
-            # First visit homepage to get cookies
-            logger.info("Step 1: Visiting homepage first...")
-            page.goto(
-                "https://www.instagram.com/",
-                wait_until='domcontentloaded',
-                timeout=30000
-            )
-            time.sleep(3)
-
-            # Cookie consent যদি থাকে
+            # ===== Step B: Cookie consent =====
+            logger.info("B: Handling cookie consent...")
             self._handle_cookie_consent(page)
             time.sleep(2)
 
-            # Now go to signup
-            logger.info("Step 2: Going to signup page...")
-            page.goto(
-                SIGNUP_URL,
-                wait_until='domcontentloaded',
-                timeout=30000
-            )
-            time.sleep(3)
-
-            logger.info(f"URL: {page.url}")
-            logger.info(f"Title: {page.title()}")
-
-            # Screenshot
+            # ===== Step C: Go to signup =====
+            logger.info("C: Navigating to signup...")
             try:
-                page.screenshot(path='/tmp/signup_page.png')
+                page.goto(
+                    SIGNUP_URL,
+                    wait_until='domcontentloaded',
+                    timeout=45000
+                )
+            except Exception as e:
+                logger.warning(f"Signup nav warning: {e}")
+
+            # ===== Step D: Wait for JS render =====
+            logger.info("D: Waiting for JS render...")
+            time.sleep(6)
+
+            logger.info(f"Current URL: {page.url}")
+            logger.info(f"Current title: {page.title()}")
+
+            # ===== Step E: Screenshot =====
+            try:
+                page.screenshot(
+                    path='/tmp/signup_page.png',
+                    full_page=True
+                )
                 logger.info("Screenshot: /tmp/signup_page.png")
             except Exception:
                 pass
 
-            # Wait for form
-            logger.info("Waiting for signup form...")
-            form_loaded = self._wait_for_signup_form(page)
+            # ===== Step F: Log all inputs =====
+            self._log_all_inputs(page)
 
-            if not form_loaded:
-                logger.warning("Form not found, trying mobile URL...")
-
-                # Try mobile version
+            # ===== Step G: Check redirects =====
+            current_url = page.url
+            if 'login' in current_url:
+                logger.warning("Redirected to login, going back to signup...")
                 page.goto(
-                    "https://www.instagram.com/accounts/emailsignup/",
-                    wait_until='networkidle',
-                    timeout=30000
+                    SIGNUP_URL,
+                    wait_until='domcontentloaded',
+                    timeout=45000
                 )
-                time.sleep(5)
-                form_loaded = self._wait_for_signup_form(page)
+                time.sleep(6)
+                self._log_all_inputs(page)
 
-            if not form_loaded:
-                # Log what we have
-                logger.error("Form still not found!")
-                source = page.content()
-                logger.error(f"Page length: {len(source)}")
-                logger.error(f"Page preview: {source[:2000]}")
+            if 'checkpoint' in current_url or 'challenge' in current_url:
+                logger.error(f"Instagram blocking! URL: {current_url}")
+                return False
 
-                inputs = page.query_selector_all('input')
-                logger.error(f"Total inputs: {len(inputs)}")
-                for inp in inputs:
-                    logger.error(
-                        f"  name={inp.get_attribute('name')}, "
-                        f"type={inp.get_attribute('type')}, "
-                        f"placeholder={inp.get_attribute('placeholder')}, "
-                        f"aria-label={inp.get_attribute('aria-label')}"
-                    )
+            # ===== Step H: Wait for form =====
+            logger.info("H: Waiting for form fields...")
+            found = self._wait_for_any_input(page)
+
+            if not found:
+                # ===== Step I: Scroll and retry =====
+                logger.warning("I: Scrolling and retrying...")
+                page.evaluate("window.scrollTo(0, 300)")
+                time.sleep(2)
+                page.evaluate("window.scrollTo(0, 0)")
+                time.sleep(2)
+                found = self._wait_for_any_input(page)
+
+            if not found:
+                # ===== Step J: Full page reload =====
+                logger.warning("J: Full reload...")
+                page.reload(wait_until='networkidle', timeout=45000)
+                time.sleep(6)
+                self._handle_cookie_consent(page)
+                time.sleep(2)
+                self._log_all_inputs(page)
+                found = self._wait_for_any_input(page)
+
+            if not found:
+                # Log full page source for debug
+                content = page.content()
+                logger.error("❌ Form NOT found!")
+                logger.error(f"Page length: {len(content)}")
+                logger.error(f"Page preview: {content[:3000]}")
                 return False
 
             logger.info("✅ Signup form loaded!")
             return True
 
         except Exception as e:
-            logger.error(f"Page load failed: {e}")
+            logger.error(f"Page load error: {e}")
             import traceback
             traceback.print_exc()
             return False
 
-    def _handle_cookie_consent(self, page: Page):
-        """Handle cookie consent popup."""
-        try:
-            consent_selectors = [
-                'button:has-text("Allow all cookies")',
-                'button:has-text("Accept All")',
-                'button:has-text("Accept")',
-                'button:has-text("Allow essential and optional cookies")',
-                '[data-testid="cookie-policy-manage-dialog-accept-button"]',
-            ]
-            for selector in consent_selectors:
-                try:
-                    btn = page.wait_for_selector(selector, timeout=3000)
-                    if btn:
-                        btn.click()
-                        logger.info(f"Cookie consent accepted: {selector}")
-                        time.sleep(1)
-                        return
-                except PlaywrightTimeout:
-                    continue
-        except Exception as e:
-            logger.debug(f"Cookie consent: {e}")
-
-    def _wait_for_signup_form(self, page: Page) -> bool:
-        """Wait for signup form to appear."""
+    def _wait_for_any_input(self, page: Page) -> bool:
+        """Wait for any signup form input to appear."""
         selectors = [
             'input[name="emailOrPhone"]',
             'input[name="email"]',
             'input[type="email"]',
             'input[aria-label="Mobile Number or Email"]',
             'input[aria-label="Email"]',
-            'input[aria-label*="email"]',
-            'input[aria-label*="Email"]',
-            'input[aria-label*="Mobile"]',
-            'input[aria-label*="Phone"]',
+            'input[aria-label*="email" i]',
+            'input[aria-label*="Mobile" i]',
+            'input[aria-label*="Phone" i]',
+            'input[placeholder*="email" i]',
+            'input[placeholder*="mobile" i]',
+            'input[placeholder*="phone" i]',
+            'input[placeholder*="Email" i]',
+            'input[placeholder*="Mobile" i]',
+            'input[placeholder*="Phone" i]',
         ]
 
         for selector in selectors:
             try:
                 element = page.wait_for_selector(
-                    selector, timeout=8000, state='visible'
+                    selector,
+                    timeout=5000,
+                    state='visible'
                 )
                 if element:
-                    logger.info(f"✅ Form found with: {selector}")
+                    logger.info(f"✅ Input found: {selector}")
                     return True
+            except PlaywrightTimeout:
+                continue
+            except Exception as e:
+                logger.debug(f"Selector {selector}: {e}")
+                continue
+
+        return False
+
+    def _handle_cookie_consent(self, page: Page):
+        """Handle cookie consent popup."""
+        consent_selectors = [
+            'button:has-text("Allow all cookies")',
+            'button:has-text("Accept All")',
+            'button:has-text("Accept")',
+            'button:has-text("Allow essential and optional cookies")',
+            '[data-testid="cookie-policy-manage-dialog-accept-button"]',
+            'button:has-text("Only allow essential cookies")',
+        ]
+        for selector in consent_selectors:
+            try:
+                btn = page.wait_for_selector(selector, timeout=3000)
+                if btn:
+                    btn.click()
+                    logger.info(f"Cookie accepted: {selector}")
+                    time.sleep(1)
+                    return
             except PlaywrightTimeout:
                 continue
             except Exception:
                 continue
 
-        return False
+    def _log_all_inputs(self, page: Page):
+        """Log all input fields for debugging."""
+        try:
+            inputs = page.query_selector_all('input')
+            logger.info(f"Total inputs on page: {len(inputs)}")
+            for i, inp in enumerate(inputs):
+                logger.info(
+                    f"  [{i}] name={inp.get_attribute('name')}, "
+                    f"type={inp.get_attribute('type')}, "
+                    f"placeholder={inp.get_attribute('placeholder')}, "
+                    f"aria-label={inp.get_attribute('aria-label')}, "
+                    f"id={inp.get_attribute('id')}"
+                )
+        except Exception as e:
+            logger.warning(f"Input log failed: {e}")
+
+    # ========================================================
+    # PRIVATE - FORM FILLING
+    # ========================================================
 
     def _fill_form(
         self, page: Page,
         email: str, fullname: str,
         username: str, password: str
     ) -> Optional[str]:
-        """
-        Fill Instagram signup form.
-        Returns final username or None on failure.
-        """
+        """Fill Instagram signup form. Returns final username."""
         try:
             # ===== EMAIL =====
             logger.info("Filling email...")
@@ -500,11 +578,11 @@ class InstagramCreator:
                 'input[placeholder*="mobile" i]',
                 'input[placeholder*="phone" i]',
             ]
-
-            if not self._fill_field(page, email_selectors, email, "Email"):
+            if not self._fill_field(
+                page, email_selectors, email, "Email"
+            ):
                 return None
-
-            self._random_sleep(1, 2)
+            self._sleep(1, 2)
 
             # ===== FULL NAME =====
             if fullname:
@@ -513,13 +591,16 @@ class InstagramCreator:
                     'input[name="fullName"]',
                     'input[aria-label="Full Name"]',
                     'input[aria-label*="Full Name" i]',
+                    'input[aria-label*="Name" i]',
                     'input[placeholder*="Full Name" i]',
                     'input[placeholder*="name" i]',
                 ]
                 self._fill_field(
-                    page, name_selectors, fullname, "Fullname", required=False
+                    page, name_selectors,
+                    fullname, "Fullname",
+                    required=False
                 )
-                self._random_sleep(1, 2)
+                self._sleep(1, 2)
 
             # ===== USERNAME =====
             logger.info("Filling username...")
@@ -530,15 +611,14 @@ class InstagramCreator:
                 'input[placeholder*="Username" i]',
                 'input[autocomplete="username"]',
             ]
-
             if not self._fill_field(
-                page, username_selectors, username, "Username"
+                page, username_selectors,
+                username, "Username"
             ):
                 return None
+            self._sleep(2, 3)
 
-            self._random_sleep(2, 3)
-
-            # Check username availability
+            # Username availability
             username = self._check_and_fix_username(
                 page, username, username_selectors
             )
@@ -554,12 +634,13 @@ class InstagramCreator:
                 'input[aria-label*="Password" i]',
                 'input[placeholder*="Password" i]',
             ]
-
-            if not self._fill_field(page, pass_selectors, password, "Password"):
+            if not self._fill_field(
+                page, pass_selectors, password, "Password"
+            ):
                 return None
+            self._sleep(1, 2)
 
-            self._random_sleep(1, 2)
-
+            logger.info("✅ Form filled successfully!")
             return username
 
         except Exception as e:
@@ -574,7 +655,7 @@ class InstagramCreator:
 
     def _fill_field(
         self, page: Page,
-        selectors: list,
+        selectors: List[str],
         value: str,
         field_name: str,
         required: bool = True
@@ -583,69 +664,64 @@ class InstagramCreator:
         for selector in selectors:
             try:
                 element = page.wait_for_selector(
-                    selector, timeout=5000, state='visible'
+                    selector,
+                    timeout=5000,
+                    state='visible'
                 )
                 if element:
+                    element.scroll_into_view_if_needed()
+                    time.sleep(0.3)
                     element.click()
                     time.sleep(0.5)
                     element.fill('')
                     time.sleep(0.3)
-                    # Human-like typing
+                    # Human typing
                     for char in value:
-                        page.keyboard.type(char, delay=random.randint(50, 150))
-                    logger.info(f"✅ {field_name} filled: {selector}")
+                        page.keyboard.type(
+                            char,
+                            delay=random.randint(50, 150)
+                        )
+                    time.sleep(0.5)
+                    logger.info(f"✅ {field_name}: {selector}")
                     return True
             except PlaywrightTimeout:
                 continue
             except Exception as e:
-                logger.debug(f"{field_name} selector {selector} failed: {e}")
+                logger.debug(f"{field_name} [{selector}]: {e}")
                 continue
 
         if required:
-            logger.error(f"❌ {field_name} field NOT found!")
-            # Debug: show all inputs
-            inputs = page.query_selector_all('input')
-            logger.error(f"Available inputs ({len(inputs)}):")
-            for inp in inputs:
-                logger.error(
-                    f"  name={inp.get_attribute('name')}, "
-                    f"type={inp.get_attribute('type')}, "
-                    f"placeholder={inp.get_attribute('placeholder')}, "
-                    f"aria-label={inp.get_attribute('aria-label')}, "
-                    f"id={inp.get_attribute('id')}"
-                )
+            logger.error(f"❌ {field_name} NOT found!")
+            self._log_all_inputs(page)
         else:
-            logger.warning(f"⚠️ {field_name} field not found, skipping")
+            logger.warning(f"⚠️ {field_name} not found, skipping")
 
         return not required
 
     def _check_and_fix_username(
         self, page: Page,
         username: str,
-        selectors: list
+        selectors: List[str]
     ) -> Optional[str]:
         """Check username availability and fix if needed."""
         try:
-            # Wait for availability check
             time.sleep(3)
+            content = page.content().lower()
 
-            unavailable_texts = [
+            unavailable = any(t.lower() in content for t in [
                 "isn't available",
                 "not available",
                 "already taken",
-                "Username not available",
-            ]
+                "username not available",
+                "this username",
+            ])
 
-            page_text = page.content().lower()
-            is_unavailable = any(
-                text.lower() in page_text for text in unavailable_texts
-            )
-
-            if is_unavailable:
-                logger.warning(f"Username '{username}' not available!")
+            if unavailable:
                 new_username = f"{username}{random.randint(100, 999)}"
-                logger.info(f"Trying: {new_username}")
-
+                logger.warning(
+                    f"Username '{username}' taken! "
+                    f"Trying: {new_username}"
+                )
                 for selector in selectors:
                     try:
                         element = page.query_selector(selector)
@@ -656,9 +732,9 @@ class InstagramCreator:
                             time.sleep(0.3)
                             for char in new_username:
                                 page.keyboard.type(
-                                    char, delay=random.randint(50, 150)
+                                    char,
+                                    delay=random.randint(50, 150)
                                 )
-                            logger.info(f"✅ New username: {new_username}")
                             time.sleep(3)
                             return new_username
                     except Exception:
@@ -669,6 +745,10 @@ class InstagramCreator:
         except Exception as e:
             logger.error(f"Username check error: {e}")
             return username
+
+    # ========================================================
+    # PRIVATE - FORM SUBMIT
+    # ========================================================
 
     def _submit_form(self, page: Page) -> bool:
         """Submit signup form."""
@@ -683,27 +763,32 @@ class InstagramCreator:
             for selector in submit_selectors:
                 try:
                     btn = page.wait_for_selector(
-                        selector, timeout=5000, state='visible'
+                        selector,
+                        timeout=5000,
+                        state='visible'
                     )
                     if btn:
                         btn.scroll_into_view_if_needed()
                         time.sleep(0.5)
                         btn.click()
-                        logger.info(f"✅ Submitted: {selector}")
+                        logger.info(f"✅ Submit: {selector}")
                         time.sleep(5)
 
-                        # Check for errors
-                        error_selectors = [
+                        # Check errors
+                        for err_sel in [
                             '[role="alert"]',
                             '.error-container',
                             'p[data-testid*="error"]',
-                        ]
-                        for err_sel in error_selectors:
-                            err = page.query_selector(err_sel)
-                            if err and err.is_visible():
-                                logger.warning(
-                                    f"Submit error: {err.inner_text()}"
-                                )
+                        ]:
+                            try:
+                                err = page.query_selector(err_sel)
+                                if err and err.is_visible():
+                                    logger.warning(
+                                        f"Error after submit: "
+                                        f"{err.inner_text()}"
+                                    )
+                            except Exception:
+                                pass
 
                         return True
                 except PlaywrightTimeout:
@@ -718,12 +803,18 @@ class InstagramCreator:
             logger.error(f"Submit error: {e}")
             return False
 
+    # ========================================================
+    # PRIVATE - VERIFICATION
+    # ========================================================
+
     def _get_verification_code(
-        self, email_data: Dict, page: Page
+        self,
+        email_data: Dict,
+        page: Page
     ) -> Optional[str]:
-        """Get verification code from email."""
+        """Get and enter verification code."""
         try:
-            logger.info("Waiting for verification code...")
+            logger.info("Fetching verification code...")
             code = self.email_manager.fetch_instagram_code(
                 email_data,
                 timeout=Config.EMAIL_CHECK_TIMEOUT
@@ -738,57 +829,60 @@ class InstagramCreator:
                 )
 
             if not code:
+                logger.error("❌ No verification code!")
                 return None
 
-            logger.info(f"✅ Code received: {code}")
+            logger.info(f"✅ Code: {code}")
 
-            # Enter code
             if not self._enter_code(page, code):
                 return None
 
             return code
 
         except Exception as e:
-            logger.error(f"Code retrieval error: {e}")
+            logger.error(f"Code error: {e}")
             return None
 
     def _enter_code(self, page: Page, code: str) -> bool:
-        """Enter verification code."""
+        """Enter verification code on page."""
         try:
             logger.info(f"Entering code: {code}")
             time.sleep(3)
 
-            # Screenshot for debug
             try:
                 page.screenshot(path='/tmp/code_page.png')
             except Exception:
                 pass
 
-            # 6 separate digit inputs
-            digit_inputs = page.query_selector_all('input[maxlength="1"]')
+            # 6 digit inputs
+            digit_inputs = page.query_selector_all(
+                'input[maxlength="1"]'
+            )
             if len(digit_inputs) >= 6:
                 for i, digit in enumerate(code[:6]):
                     digit_inputs[i].click()
                     time.sleep(0.3)
                     digit_inputs[i].type(digit)
                     time.sleep(0.3)
-                logger.info("✅ Code entered in digit fields")
+                logger.info("✅ Code in digit fields")
             else:
-                # Single input field
+                # Single input
                 code_selectors = [
                     'input[name="confirmationCode"]',
                     'input[aria-label*="code" i]',
                     'input[aria-label*="Code" i]',
                     'input[placeholder*="code" i]',
+                    'input[placeholder*="Code" i]',
                     'input[autocomplete="one-time-code"]',
                     'input[inputmode="numeric"]',
                 ]
-
-                code_entered = False
+                entered = False
                 for selector in code_selectors:
                     try:
                         element = page.wait_for_selector(
-                            selector, timeout=5000, state='visible'
+                            selector,
+                            timeout=5000,
+                            state='visible'
                         )
                         if element:
                             element.click()
@@ -796,37 +890,31 @@ class InstagramCreator:
                             element.fill('')
                             for char in code:
                                 page.keyboard.type(
-                                    char, delay=random.randint(100, 200)
+                                    char,
+                                    delay=random.randint(100, 200)
                                 )
-                            logger.info(f"✅ Code entered: {selector}")
-                            code_entered = True
+                            logger.info(f"✅ Code: {selector}")
+                            entered = True
                             break
                     except PlaywrightTimeout:
                         continue
                     except Exception:
                         continue
 
-                if not code_entered:
+                if not entered:
                     logger.error("❌ Code input not found!")
-                    inputs = page.query_selector_all('input')
-                    for inp in inputs:
-                        logger.error(
-                            f"  name={inp.get_attribute('name')}, "
-                            f"placeholder={inp.get_attribute('placeholder')}, "
-                            f"aria-label={inp.get_attribute('aria-label')}"
-                        )
+                    self._log_all_inputs(page)
                     return False
 
             time.sleep(2)
 
-            # Confirm
-            confirm_selectors = [
+            # Confirm button
+            for selector in [
                 'button:has-text("Confirm")',
                 'button:has-text("Next")',
                 'button:has-text("Continue")',
                 'button[type="submit"]',
-            ]
-            for selector in confirm_selectors:
+            ]:
                 try:
                     btn = page.query_selector(selector)
                     if btn and btn.is_visible():
@@ -846,12 +934,12 @@ class InstagramCreator:
     def _click_resend(self, page: Page):
         """Click resend code button."""
         try:
-            resend_selectors = [
+            for selector in [
                 'button:has-text("Resend")',
                 'button:has-text("Send again")',
                 'a:has-text("Resend")',
-            ]
-            for selector in resend_selectors:
+                'button:has-text("Resend Code")',
+            ]:
                 try:
                     btn = page.query_selector(selector)
                     if btn and btn.is_visible():
@@ -864,17 +952,22 @@ class InstagramCreator:
         except Exception as e:
             logger.debug(f"Resend: {e}")
 
+    # ========================================================
+    # PRIVATE - BIRTHDAY
+    # ========================================================
+
     def _handle_birthday(self, page: Page) -> bool:
         """Handle birthday page."""
         try:
-            logger.info("Looking for birthday page...")
+            logger.info("Checking birthday page...")
             time.sleep(3)
 
-            # Screenshot
             try:
                 page.screenshot(path='/tmp/birthday_page.png')
             except Exception:
                 pass
+
+            logger.info(f"URL: {page.url}")
 
             birthday = generate_birthday()
             logger.info(
@@ -882,107 +975,93 @@ class InstagramCreator:
                 f"{birthday['day']}/{birthday['year']}"
             )
 
-            # Check if birthday page exists
-            birthday_indicators = [
+            # Check birthday page
+            birthday_found = False
+            for indicator in [
                 'select[title="Month:"]',
                 'select[aria-label="Month"]',
                 'select[name="month"]',
                 'text="Add your birthday"',
                 'text="Birthday"',
-            ]
-
-            birthday_page = False
-            for indicator in birthday_indicators:
+                '[aria-label*="birthday" i]',
+            ]:
                 try:
                     element = page.wait_for_selector(
                         indicator, timeout=8000
                     )
                     if element:
-                        birthday_page = True
-                        logger.info(
-                            f"✅ Birthday page found: {indicator}"
-                        )
+                        birthday_found = True
+                        logger.info(f"Birthday page: {indicator}")
                         break
                 except PlaywrightTimeout:
                     continue
 
-            if not birthday_page:
-                logger.warning(
-                    "Birthday page not found, might be on different step"
-                )
-                # Check current URL/page
-                logger.info(f"Current URL: {page.url}")
+            if not birthday_found:
+                logger.warning("Birthday page not found, skipping")
                 return True
 
             # Set Month
-            month_selectors = [
+            for selector in [
                 'select[title="Month:"]',
                 'select[aria-label="Month"]',
                 'select[name="month"]',
-            ]
-            for selector in month_selectors:
+            ]:
                 try:
-                    element = page.query_selector(selector)
-                    if element:
+                    if page.query_selector(selector):
                         page.select_option(
                             selector, str(birthday['month'])
                         )
-                        logger.info(f"✅ Month set: {birthday['month']}")
+                        logger.info(f"✅ Month: {birthday['month']}")
                         time.sleep(0.5)
                         break
                 except Exception:
                     continue
 
             # Set Day
-            day_selectors = [
+            for selector in [
                 'select[title="Day:"]',
                 'select[aria-label="Day"]',
                 'select[name="day"]',
-            ]
-            for selector in day_selectors:
+            ]:
                 try:
-                    element = page.query_selector(selector)
-                    if element:
+                    if page.query_selector(selector):
                         page.select_option(
                             selector, str(birthday['day'])
                         )
-                        logger.info(f"✅ Day set: {birthday['day']}")
+                        logger.info(f"✅ Day: {birthday['day']}")
                         time.sleep(0.5)
                         break
                 except Exception:
                     continue
 
             # Set Year
-            year_selectors = [
+            for selector in [
                 'select[title="Year:"]',
                 'select[aria-label="Year"]',
                 'select[name="year"]',
-            ]
-            for selector in year_selectors:
+            ]:
                 try:
-                    element = page.query_selector(selector)
-                    if element:
+                    if page.query_selector(selector):
                         page.select_option(
                             selector, str(birthday['year'])
                         )
-                        logger.info(f"✅ Year set: {birthday['year']}")
+                        logger.info(f"✅ Year: {birthday['year']}")
                         time.sleep(0.5)
                         break
                 except Exception:
                     continue
 
-            # Next button
-            next_selectors = [
+            # Next
+            for selector in [
                 'button:has-text("Next")',
                 'button:has-text("Continue")',
                 'button[type="submit"]',
-            ]
-            for selector in next_selectors:
+            ]:
                 try:
                     btn = page.query_selector(selector)
                     if btn and btn.is_visible():
                         btn.click()
-                        logger.info(f"✅ Next after birthday: {selector}")
+                        logger.info(f"✅ Birthday next: {selector}")
                         time.sleep(3)
                         break
                 except Exception:
@@ -994,8 +1073,12 @@ class InstagramCreator:
             logger.error(f"Birthday error: {e}")
             return False
 
+    # ========================================================
+    # PRIVATE - FINALIZE
+    # ========================================================
+
     def _finalize_account(self, page: Page, username: str):
-        """Handle post-signup steps."""
+        """Handle all post-signup steps."""
         try:
             time.sleep(5)
             logger.info(f"Finalizing... URL: {page.url}")
@@ -1005,34 +1088,38 @@ class InstagramCreator:
                 try:
                     avatar_path = create_simple_avatar(username)
                     if avatar_path:
-                        upload = page.query_selector('input[type="file"]')
+                        upload = page.query_selector(
+                            'input[type="file"]'
+                        )
                         if upload:
                             upload.set_input_files(avatar_path)
                             time.sleep(2)
-                            next_btn = page.query_selector(
+                            btn = page.query_selector(
                                 'button:has-text("Next")'
                             )
-                            if next_btn:
-                                next_btn.click()
+                            if btn:
+                                btn.click()
                                 time.sleep(2)
                             logger.info("✅ Profile picture uploaded")
                 except Exception as e:
                     logger.warning(f"Profile pic: {e}")
 
-            # Skip optional steps
-            skip_selectors = [
-                'button:has-text("Skip")',
-                'button:has-text("Not Now")',
-                'button:has-text("Cancel")',
-            ]
-            for _ in range(5):
+            # Skip all optional steps
+            skip_count = 0
+            for _ in range(8):
                 skipped = False
-                for selector in skip_selectors:
+                for selector in [
+                    'button:has-text("Skip")',
+                    'button:has-text("Not Now")',
+                    'button:has-text("Maybe Later")',
+                    'button:has-text("Cancel")',
+                ]:
                     try:
                         btn = page.query_selector(selector)
                         if btn and btn.is_visible():
                             btn.click()
-                            logger.info(f"Skipped: {selector}")
+                            skip_count += 1
+                            logger.info(f"Skipped [{skip_count}]: {selector}")
                             time.sleep(2)
                             skipped = True
                             break
@@ -1051,10 +1138,28 @@ class InstagramCreator:
                         Config.MIN_ACCOUNTS_TO_FOLLOW,
                         Config.MAX_ACCOUNTS_TO_FOLLOW
                     )
+                    count = 0
                     for i in range(min(num, len(follow_btns))):
-                        follow_btns[i].click()
-                        time.sleep(random.uniform(1, 2))
-                    logger.info(f"✅ Followed {min(num, len(follow_btns))}")
+                        try:
+                            follow_btns[i].click()
+                            count += 1
+                            time.sleep(random.uniform(1, 2))
+                        except Exception:
+                            continue
+                    logger.info(f"✅ Followed {count} accounts")
+
+                    # Next/Done
+                    for selector in [
+                        'button:has-text("Next")',
+                        'button:has-text("Done")',
+                    ]:
+                        try:
+                            btn = page.query_selector(selector)
+                            if btn and btn.is_visible():
+                                btn.click()
+                                break
+                        except Exception:
+                            continue
                 except Exception as e:
                     logger.warning(f"Follow: {e}")
 
@@ -1063,8 +1168,12 @@ class InstagramCreator:
         except Exception as e:
             logger.warning(f"Finalize warning: {e}")
 
-    def _random_sleep(self, min_s: float, max_s: float):
-        """Sleep random time."""
+    # ========================================================
+    # PRIVATE - HELPERS
+    # ========================================================
+
+    def _sleep(self, min_s: float, max_s: float):
+        """Random sleep."""
         time.sleep(random.uniform(min_s, max_s))
 
     def _send_progress(
