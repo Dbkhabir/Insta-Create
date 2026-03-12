@@ -1,11 +1,13 @@
 """
 Instagram Account Creator Module.
 Handles complete Instagram account creation flow with Selenium.
+Full debugging version for Railway deployment.
 """
 
 import logging
 import time
 import random
+import os
 from typing import Optional, Dict, Any, Callable
 from datetime import datetime
 from selenium import webdriver
@@ -33,13 +35,7 @@ class InstagramCreator:
     """Handles Instagram account creation automation."""
     
     def __init__(self, user_config: UserConfig, progress_callback: Optional[Callable] = None):
-        """
-        Initialize Instagram creator.
-        
-        Args:
-            user_config: User configuration
-            progress_callback: Callback function for progress updates
-        """
+        """Initialize Instagram creator."""
         self.config = user_config
         self.progress_callback = progress_callback
         self.email_manager = EmailProviderManager()
@@ -50,12 +46,7 @@ class InstagramCreator:
         self.failed_accounts = []
     
     def create_accounts(self) -> Dict[str, Any]:
-        """
-        Create multiple Instagram accounts.
-        
-        Returns:
-            dict: Results summary
-        """
+        """Create multiple Instagram accounts."""
         logger.info(f"Starting creation of {self.config.num_accounts} accounts...")
         self._send_progress("🚀 Starting account creation...", 0)
         
@@ -65,9 +56,9 @@ class InstagramCreator:
             self.current_account = i + 1
             progress_pct = int((i / self.config.num_accounts) * 100)
             
-            logger.info(f"\n{'='*50}")
-            logger.info(f"Creating account {self.current_account}/{self.config.num_accounts}")
-            logger.info(f"{'='*50}\n")
+            logger.info(f"\n{'='*70}")
+            logger.info(f"ACCOUNT {self.current_account}/{self.config.num_accounts}")
+            logger.info(f"{'='*70}\n")
             
             self._send_progress(
                 f"📝 Creating account {self.current_account}/{self.config.num_accounts}...",
@@ -80,18 +71,20 @@ class InstagramCreator:
                 if result['success']:
                     self.successful_accounts.append(result)
                     self._send_progress(
-                        f"✅ Account {self.current_account} created successfully!",
+                        f"✅ Account {self.current_account} created!",
                         progress_pct
                     )
                 else:
                     self.failed_accounts.append(result)
                     self._send_progress(
-                        f"❌ Account {self.current_account} failed: {result.get('error', 'Unknown error')}",
+                        f"❌ Account {self.current_account} failed: {result.get('error', 'Unknown')}",
                         progress_pct
                     )
                 
             except Exception as e:
-                logger.error(f"Unexpected error creating account {self.current_account}: {e}")
+                logger.error(f"Unexpected error: {e}")
+                import traceback
+                traceback.print_exc()
                 self.failed_accounts.append({
                     'account_number': self.current_account,
                     'success': False,
@@ -104,7 +97,7 @@ class InstagramCreator:
                     Config.MIN_DELAY_BETWEEN_ACCOUNTS,
                     Config.MAX_DELAY_BETWEEN_ACCOUNTS
                 )
-                logger.info(f"Waiting {delay} seconds before next account...")
+                logger.info(f"Waiting {delay}s before next account...")
                 time.sleep(delay)
         
         elapsed_time = int(time.time() - start_time)
@@ -122,15 +115,7 @@ class InstagramCreator:
         return summary
     
     def _create_single_account(self, index: int) -> Dict[str, Any]:
-        """
-        Create a single Instagram account.
-        
-        Args:
-            index: Account index
-            
-        Returns:
-            dict: Account creation result
-        """
+        """Create a single Instagram account with detailed logging."""
         account_data = {
             'account_number': self.current_account,
             'success': False,
@@ -138,22 +123,38 @@ class InstagramCreator:
         }
         
         try:
-            # Step 1: Initialize browser
-            self._send_progress("🌐 Initializing browser...", step="browser")
-            if not self._init_browser():
-                raise Exception("Failed to initialize browser")
+            logger.info("="*70)
+            logger.info(f"ACCOUNT {self.current_account}/{self.config.num_accounts} - STARTING")
+            logger.info("="*70)
             
-            # Step 2: Generate email
-            self._send_progress("📧 Creating email address...", step="email")
+            # Step 1: Browser
+            self._send_progress("🌐 Step 1/10: Initializing browser...", step="browser")
+            logger.info("Step 1: Browser initialization...")
+            
+            if not self._init_browser():
+                raise Exception("Browser initialization failed")
+            
+            logger.info("✅ Browser initialized successfully")
+            
+            # Step 2: Email
+            self._send_progress("📧 Step 2/10: Creating email address...", step="email")
+            logger.info("Step 2: Creating email...")
+            
             email_data = self.email_manager.create_email_with_rotation()
             
             if not email_data:
-                raise Exception("Failed to create email address")
+                raise Exception("Email creation failed - all providers failed")
+            
+            logger.info(f"✅ Email created: {email_data['email']}")
+            logger.info(f"   Provider: {email_data.get('provider', 'unknown')}")
             
             account_data['email'] = email_data['email']
             account_data['email_provider'] = email_data.get('provider', 'unknown')
             
             # Step 3: Generate account details
+            self._send_progress("🔧 Step 3/10: Generating account details...", step="details")
+            logger.info("Step 3: Generating account details...")
+            
             username = self.config.get_username(index)
             fullname = self.config.get_fullname(index)
             password = self.config.get_password(index)
@@ -162,38 +163,61 @@ class InstagramCreator:
             account_data['fullname'] = fullname
             account_data['password'] = password
             
-            logger.info(f"Account details: {username} / {email_data['email']}")
+            logger.info(f"✅ Username: {username}")
+            logger.info(f"   Fullname: {fullname}")
+            logger.info(f"   Password: {'*' * len(password)}")
             
-            # Step 4: Navigate to signup page
-            self._send_progress("🔗 Opening Instagram signup page...", step="navigate")
+            # Step 4: Navigate to Instagram
+            self._send_progress("🔗 Step 4/10: Opening Instagram...", step="navigate")
+            logger.info("Step 4: Navigating to Instagram...")
+            
             if not self._navigate_to_signup():
-                raise Exception("Failed to navigate to signup page")
+                raise Exception("Failed to open Instagram signup page")
             
-            # Step 5: Fill signup form
-            self._send_progress("✍️ Filling signup form...", step="form")
+            logger.info("✅ Instagram page opened")
+            
+            # Step 5: Fill form
+            self._send_progress("✍️ Step 5/10: Filling signup form...", step="form")
+            logger.info("Step 5: Filling form...")
+            
             if not self._fill_signup_form(email_data['email'], fullname, username, password):
                 raise Exception("Failed to fill signup form")
             
-            # Step 6: Handle captcha if present
+            logger.info("✅ Form filled")
+            
+            # Step 6: Check captcha
+            self._send_progress("🤖 Step 6/10: Checking for captcha...", step="captcha")
+            logger.info("Step 6: Captcha check...")
+            
             if self._check_for_captcha():
+                logger.warning("⚠️ Captcha detected!")
                 self._send_progress("🤖 Solving captcha...", step="captcha")
+                
                 if not self._solve_captcha():
-                    raise Exception("Failed to solve captcha")
+                    raise Exception("Captcha solve failed")
             
-            # Step 7: Submit form
-            self._send_progress("📤 Submitting signup form...", step="submit")
+            logger.info("✅ No captcha or solved")
+            
+            # Step 7: Submit
+            self._send_progress("📤 Step 7/10: Submitting form...", step="submit")
+            logger.info("Step 7: Submitting...")
+            
             if not self._submit_signup():
-                raise Exception("Failed to submit signup form")
+                raise Exception("Form submission failed")
             
-            # Step 8: Wait for and enter verification code
-            self._send_progress("📬 Waiting for verification code...", step="verification")
+            logger.info("✅ Form submitted")
+            
+            # Step 8: Verification code
+            self._send_progress("📬 Step 8/10: Waiting for verification code...", step="verification")
+            logger.info("Step 8: Waiting for verification code...")
+            
             verification_code = self.email_manager.fetch_instagram_code(
                 email_data,
                 timeout=Config.EMAIL_CHECK_TIMEOUT
             )
             
             if not verification_code:
-                # Try to resend code
+                logger.warning("⚠️ No verification code, trying resend...")
                 self._click_resend_code()
                 verification_code = self.email_manager.fetch_instagram_code(
                     email_data,
@@ -201,46 +225,58 @@ class InstagramCreator:
                 )
             
             if not verification_code:
-                raise Exception("Failed to receive verification code")
+                raise Exception("Verification code not received")
+            
+            logger.info(f"✅ Verification code received: {verification_code}")
             
             if not self._enter_verification_code(verification_code):
                 raise Exception("Failed to enter verification code")
             
-            # Step 9: Complete birthday selection
-            self._send_progress("🎂 Setting birthday...", step="birthday")
+            logger.info("✅ Code entered")
+            
+            # Step 9: Birthday
+            self._send_progress("🎂 Step 9/10: Setting birthday...", step="birthday")
+            logger.info("Step 9: Setting birthday...")
+            
             if not self._set_birthday():
                 raise Exception("Failed to set birthday")
             
-            # Step 10: Optional profile setup
+            logger.info("✅ Birthday set")
+            
+            # Step 10: Profile setup
+            self._send_progress("✨ Step 10/10: Finalizing account...", step="finalize")
+            logger.info("Step 10: Profile setup...")
+            
             if Config.ADD_PROFILE_PICTURE:
-                self._send_progress("📸 Adding profile picture...", step="avatar")
                 avatar_path = create_simple_avatar(username)
                 if avatar_path:
                     self._upload_profile_picture(avatar_path)
             
-            # Step 11: Follow suggested accounts
             if Config.FOLLOW_SUGGESTED_ACCOUNTS:
-                self._send_progress("👥 Following suggested accounts...", step="follow")
                 self._follow_suggested_accounts()
             
-            # Step 12: Setup 2FA (optional)
-            if Config.ENABLE_2FA:
-                self._send_progress("🔐 Setting up 2FA...", step="2fa")
-                totp_secret = self._setup_2fa()
-                if totp_secret:
-                    account_data['totp_secret'] = totp_secret
+            logger.info("✅ Profile setup complete")
             
-            # Save credentials
+            # Success!
             account_data['success'] = True
             account_data['status'] = 'active'
             save_credentials(account_data)
             
-            logger.info(f"✅ Account created successfully: {username}")
+            logger.info("="*70)
+            logger.info(f"✅ ACCOUNT {self.current_account} CREATED SUCCESSFULLY!")
+            logger.info("="*70)
             
             return account_data
             
         except Exception as e:
-            logger.error(f"Error creating account: {e}")
+            logger.error("="*70)
+            logger.error(f"❌ ACCOUNT {self.current_account} FAILED!")
+            logger.error(f"Error: {str(e)}")
+            logger.error("="*70)
+            
+            import traceback
+            traceback.print_exc()
+            
             account_data['error'] = str(e)
             return account_data
             
@@ -248,59 +284,127 @@ class InstagramCreator:
             self._cleanup_browser()
     
     def _init_browser(self) -> bool:
-        """
-        Initialize browser with stealth settings.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Initialize browser with stealth settings for Railway."""
         try:
+            logger.info("Initializing browser for Railway environment...")
+            
             options = uc.ChromeOptions()
             
-            if Config.HEADLESS_MODE:
-                options.add_argument('--headless=new')
-            
-            # Stealth arguments
-            options.add_argument('--disable-blink-features=AutomationControlled')
-            options.add_argument('--disable-dev-shm-usage')
+            # Railway/Production specific settings
+            options.add_argument('--headless=new')
             options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-gpu')
-            options.add_argument(f'--user-agent={generate_user_agent()}')
+            options.add_argument('--disable-software-rasterizer')
+            options.add_argument('--disable-extensions')
+            options.add_argument('--disable-setuid-sandbox')
+            options.add_argument('--single-process')
+            options.add_argument('--disable-background-networking')
+            options.add_argument('--disable-background-timer-throttling')
+            options.add_argument('--disable-backgrounding-occluded-windows')
+            options.add_argument('--disable-breakpad')
+            options.add_argument('--disable-component-extensions-with-background-pages')
+            options.add_argument('--disable-features=TranslateUI')
+            options.add_argument('--disable-ipc-flooding-protection')
+            options.add_argument('--disable-renderer-backgrounding')
+            options.add_argument('--enable-features=NetworkService,NetworkServiceInProcess')
+            options.add_argument('--force-color-profile=srgb')
+            options.add_argument('--hide-scrollbars')
+            options.add_argument('--metrics-recording-only')
+            options.add_argument('--mute-audio')
             
-            # Random window size
-            width, height = get_random_resolution()
-            options.add_argument(f'--window-size={width},{height}')
+            # Memory optimization
+            options.add_argument('--disable-dev-tools')
+            options.add_argument('--disable-logging')
+            options.add_argument('--disable-permissions-api')
+            options.add_argument('--disable-web-security')
             
-            self.driver = uc.Chrome(options=options, version_main=120)
+            # Set window size
+            options.add_argument('--window-size=1920,1080')
             
-            # Additional stealth settings
-            self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-                "userAgent": generate_user_agent()
-            })
+            # User agent
+            user_agent = generate_user_agent()
+            options.add_argument(f'--user-agent={user_agent}')
+            logger.info(f"User agent: {user_agent}")
             
-            self.driver.execute_script(
-                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            # Disable automation flags
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
+            
+            # Set binary location (Railway specific)
+            chrome_bin = os.getenv('CHROME_BIN', '/usr/bin/chromium')
+            if os.path.exists(chrome_bin):
+                options.binary_location = chrome_bin
+                logger.info(f"Using Chrome binary: {chrome_bin}")
+            else:
+                logger.warning(f"Chrome binary not found at: {chrome_bin}")
+            
+            # Initialize driver with undetected-chromedriver
+            logger.info("Creating Chrome driver instance...")
+            
+            driver_path = os.getenv('CHROMEDRIVER_PATH', '/usr/bin/chromedriver')
+            logger.info(f"ChromeDriver path: {driver_path}")
+            
+            if os.path.exists(driver_path):
+                logger.info("ChromeDriver found")
+            else:
+                logger.warning(f"ChromeDriver not found at: {driver_path}")
+            
+            self.driver = uc.Chrome(
+                options=options,
+                driver_executable_path=driver_path,
+                version_main=None,
+                headless=True
             )
             
-            logger.info("Browser initialized successfully")
+            # Set timeouts
+            self.driver.set_page_load_timeout(Config.BROWSER_TIMEOUT)
+            self.driver.implicitly_wait(10)
+            
+            # Additional stealth settings via CDP
+            try:
+                self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                    "userAgent": user_agent
+                })
+                
+                self.driver.execute_script(
+                    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+                )
+                
+                logger.info("Stealth settings applied successfully")
+            except Exception as e:
+                logger.warning(f"Could not apply some stealth settings: {e}")
+            
+            logger.info("✅ Browser initialized successfully")
             return True
             
         except Exception as e:
-            logger.error(f"Error initializing browser: {e}")
+            logger.error(f"❌ Error initializing browser: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _navigate_to_signup(self) -> bool:
-        """
-        Navigate to Instagram signup page.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Navigate to Instagram signup page."""
         try:
+            logger.info(f"Opening URL: {Config.INSTAGRAM_SIGNUP_URL}")
             self.driver.get(Config.INSTAGRAM_SIGNUP_URL)
             
             # Wait for page load
             time.sleep(5)
+            
+            # Log page info
+            logger.info(f"Page title: {self.driver.title}")
+            logger.info(f"Current URL: {self.driver.current_url}")
+            
+            # Take screenshot for debugging
+            try:
+                screenshot_path = "/tmp/instagram_page.png"
+                self.driver.save_screenshot(screenshot_path)
+                logger.info(f"Screenshot saved: {screenshot_path}")
+            except Exception as e:
+                logger.warning(f"Could not save screenshot: {e}")
             
             # Scroll page naturally
             self.driver.execute_script("window.scrollTo(0, 300);")
@@ -308,80 +412,75 @@ class InstagramCreator:
             self.driver.execute_script("window.scrollTo(0, 0);")
             random_delay(2, 3)
             
-            logger.info("Navigated to signup page")
+            logger.info("Instagram page loaded")
             return True
             
         except Exception as e:
             logger.error(f"Error navigating to signup: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _fill_signup_form(self, email: str, fullname: str, username: str, password: str) -> bool:
-        """
-        Fill the signup form with account details.
-        
-        Args:
-            email: Email address
-            fullname: Full name
-            username: Username
-            password: Password
-            
-        Returns:
-            bool: True if successful
-        """
+        """Fill the signup form."""
         try:
             wait = WebDriverWait(self.driver, 20)
             
-            # Fill email
             logger.info("Filling email field...")
             email_input = wait.until(
                 EC.presence_of_element_located((By.NAME, "emailOrPhone"))
             )
             self._human_type(email_input, email)
             random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
+            logger.info(f"Email filled: {email}")
             
-            # Fill full name
             if fullname:
                 logger.info("Filling full name field...")
                 fullname_input = self.driver.find_element(By.NAME, "fullName")
                 self._human_type(fullname_input, fullname)
                 random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
+                logger.info(f"Fullname filled: {fullname}")
             
-            # Fill username
             logger.info("Filling username field...")
             username_input = self.driver.find_element(By.NAME, "username")
             self._human_type(username_input, username)
             random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
+            logger.info(f"Username filled: {username}")
             
             # Check if username is available
             time.sleep(3)
             if not self._check_username_available():
-                # Add random digits and retry
+                logger.warning("Username not available, adding suffix...")
                 username = f"{username}{random.randint(10, 99)}"
                 username_input.clear()
                 self._human_type(username_input, username)
                 random_delay(2, 3)
             
-            # Fill password
             logger.info("Filling password field...")
             password_input = self.driver.find_element(By.NAME, "password")
             self._human_type(password_input, password)
             random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
+            logger.info("Password filled")
             
             logger.info("Signup form filled successfully")
             return True
             
         except Exception as e:
             logger.error(f"Error filling signup form: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Take screenshot on error
+            try:
+                self.driver.save_screenshot("/tmp/form_error.png")
+                logger.info("Error screenshot saved")
+            except:
+                pass
+            
             return False
     
     def _human_type(self, element, text: str) -> None:
-        """
-        Type text with human-like delays.
-        
-        Args:
-            element: Web element to type into
-            text: Text to type
-        """
+        """Type text with human-like delays."""
         element.click()
         time.sleep(random.uniform(0.3, 0.7))
         
@@ -389,7 +488,6 @@ class InstagramCreator:
             element.send_keys(char)
             time.sleep(human_typing_delay())
             
-            # Random typo simulation (10% chance)
             if random.random() < 0.1:
                 element.send_keys(random.choice('abcdefgh'))
                 time.sleep(human_typing_delay())
@@ -397,60 +495,39 @@ class InstagramCreator:
                 time.sleep(human_typing_delay())
     
     def _check_username_available(self) -> bool:
-        """
-        Check if username is available.
-        
-        Returns:
-            bool: True if available
-        """
+        """Check if username is available."""
         try:
-            # Look for error message
             error_elements = self.driver.find_elements(
                 By.XPATH,
                 "//*[contains(text(), \"isn't available\") or contains(text(), 'not available')]"
             )
-            
-            return len(error_elements) == 0
-            
+            available = len(error_elements) == 0
+            logger.info(f"Username available: {available}")
+            return available
         except Exception:
             return True
     
     def _check_for_captcha(self) -> bool:
-        """
-        Check if captcha is present.
-        
-        Returns:
-            bool: True if captcha found
-        """
+        """Check if captcha is present."""
         try:
-            # Look for reCAPTCHA iframe or checkbox
             captcha_elements = self.driver.find_elements(
                 By.XPATH,
                 "//iframe[contains(@src, 'recaptcha')]"
             )
-            
-            return len(captcha_elements) > 0
-            
+            has_captcha = len(captcha_elements) > 0
+            logger.info(f"Captcha present: {has_captcha}")
+            return has_captcha
         except Exception:
             return False
     
     def _solve_captcha(self) -> bool:
-        """
-        Solve captcha if present.
-        
-        Returns:
-            bool: True if solved
-        """
+        """Solve captcha if present."""
         try:
-            # Try free methods first
             logger.info("Attempting free captcha bypass...")
             time.sleep(15)
             
-            # If still present, use paid service
             if self._check_for_captcha() and self.captcha_solver.api_key:
                 logger.info("Using 2Captcha service...")
-                # Implementation would extract site key and solve
-                pass
             
             return True
             
@@ -459,30 +536,20 @@ class InstagramCreator:
             return False
     
     def _submit_signup(self) -> bool:
-        """
-        Submit the signup form.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Submit the signup form."""
         try:
-            # Find and click signup button
             submit_button = self.driver.find_element(
                 By.XPATH,
                 "//button[@type='submit' or contains(text(), 'Sign up')]"
             )
             
-            # Move to button and click
             self.driver.execute_script("arguments[0].scrollIntoView(true);", submit_button)
             random_delay(0.5, 1)
             submit_button.click()
             
             logger.info("Signup form submitted")
-            
-            # Wait for response
             random_delay(5, 8)
             
-            # Check for errors
             error_elements = self.driver.find_elements(
                 By.XPATH,
                 "//*[contains(text(), 'error') or contains(text(), 'Error')]"
@@ -499,44 +566,29 @@ class InstagramCreator:
             return False
     
     def _enter_verification_code(self, code: str) -> bool:
-        """
-        Enter the email verification code.
-        
-        Args:
-            code: 6-digit verification code
-            
-        Returns:
-            bool: True if successful
-        """
+        """Enter the email verification code."""
         try:
             logger.info(f"Entering verification code: {code}")
             
             wait = WebDriverWait(self.driver, 20)
-            
-            # Look for code input fields
             code_inputs = wait.until(
                 EC.presence_of_all_elements_located((By.TAG_NAME, "input"))
             )
             
-            # Filter for code inputs (usually 6 separate inputs)
             code_fields = [inp for inp in code_inputs if inp.get_attribute('maxlength') == '1']
             
             if code_fields and len(code_fields) == 6:
-                # Enter each digit separately
                 for i, digit in enumerate(code):
                     code_fields[i].click()
                     time.sleep(0.3)
                     code_fields[i].send_keys(digit)
                     time.sleep(0.3)
             else:
-                # Single input field
                 code_input = code_inputs[0]
                 self._human_type(code_input, code)
             
-            # Wait for auto-submit or click confirm
             random_delay(3, 5)
             
-            # Try to find and click confirm button
             try:
                 confirm_button = self.driver.find_element(
                     By.XPATH,
@@ -556,7 +608,7 @@ class InstagramCreator:
             return False
     
     def _click_resend_code(self) -> None:
-        """Click the resend code button if available."""
+        """Click the resend code button."""
         try:
             resend_button = self.driver.find_element(
                 By.XPATH,
@@ -569,20 +621,13 @@ class InstagramCreator:
             pass
     
     def _set_birthday(self) -> bool:
-        """
-        Set birthday on Instagram.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Set birthday on Instagram."""
         try:
             logger.info("Setting birthday...")
             
             birthday = generate_birthday()
-            
             wait = WebDriverWait(self.driver, 20)
             
-            # Month select
             month_select = wait.until(
                 EC.presence_of_element_located((By.XPATH, "//select[@title='Month:' or @aria-label='Month']"))
             )
@@ -592,7 +637,6 @@ class InstagramCreator:
             month_option.click()
             time.sleep(0.5)
             
-            # Day select
             day_select = self.driver.find_element(By.XPATH, "//select[@title='Day:' or @aria-label='Day']")
             day_select.click()
             time.sleep(0.5)
@@ -600,7 +644,6 @@ class InstagramCreator:
             day_option.click()
             time.sleep(0.5)
             
-            # Year select
             year_select = self.driver.find_element(By.XPATH, "//select[@title='Year:' or @aria-label='Year']")
             year_select.click()
             time.sleep(0.5)
@@ -608,7 +651,6 @@ class InstagramCreator:
             year_option.click()
             time.sleep(0.5)
             
-            # Click Next
             next_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]")
             next_button.click()
             
@@ -622,32 +664,21 @@ class InstagramCreator:
             return False
     
     def _upload_profile_picture(self, image_path: str) -> bool:
-        """
-        Upload profile picture.
-        
-        Args:
-            image_path: Path to image file
-            
-        Returns:
-            bool: True if successful
-        """
+        """Upload profile picture."""
         try:
             logger.info("Uploading profile picture...")
             
-            # Look for upload button or skip button
             try:
                 upload_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
                 upload_input.send_keys(image_path)
                 random_delay(2, 3)
                 
-                # Click confirm/next
                 next_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Next')]")
                 next_button.click()
                 
                 logger.info("Profile picture uploaded")
                 return True
             except NoSuchElementException:
-                # Skip if not available
                 skip_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Skip')]")
                 skip_button.click()
                 return False
@@ -657,22 +688,15 @@ class InstagramCreator:
             return False
     
     def _follow_suggested_accounts(self) -> bool:
-        """
-        Follow suggested accounts.
-        
-        Returns:
-            bool: True if successful
-        """
+        """Follow suggested accounts."""
         try:
             logger.info("Following suggested accounts...")
             
-            # Look for follow buttons
             follow_buttons = self.driver.find_elements(
                 By.XPATH,
                 "//button[contains(text(), 'Follow')]"
             )
             
-            # Follow random 2-3 accounts
             num_to_follow = random.randint(
                 Config.MIN_ACCOUNTS_TO_FOLLOW,
                 Config.MAX_ACCOUNTS_TO_FOLLOW
@@ -683,7 +707,6 @@ class InstagramCreator:
                 logger.info(f"Followed account {i + 1}")
                 random_delay(2, 3)
             
-            # Click Next or Done
             try:
                 next_button = self.driver.find_element(
                     By.XPATH,
@@ -699,34 +722,6 @@ class InstagramCreator:
             logger.error(f"Error following accounts: {e}")
             return False
     
-    def _setup_2fa(self) -> Optional[str]:
-        """
-        Setup two-factor authentication.
-        
-        Returns:
-            str: TOTP secret or None
-        """
-        try:
-            logger.info("Setting up 2FA...")
-            
-            # Navigate to security settings
-            self.driver.get("https://www.instagram.com/accounts/two_factor_authentication/")
-            random_delay(3, 5)
-            
-            # Implementation would:
-            # 1. Click setup 2FA
-            # 2. Extract QR code
-            # 3. Decode to get TOTP secret
-            # 4. Generate and enter first code
-            # 5. Save backup codes
-            
-            # Placeholder return
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error setting up 2FA: {e}")
-            return None
-    
     def _cleanup_browser(self) -> None:
         """Clean up browser resources."""
         try:
@@ -738,14 +733,7 @@ class InstagramCreator:
             logger.error(f"Error cleaning up browser: {e}")
     
     def _send_progress(self, message: str, percentage: Optional[int] = None, step: Optional[str] = None) -> None:
-        """
-        Send progress update via callback.
-        
-        Args:
-            message: Progress message
-            percentage: Progress percentage (0-100)
-            step: Current step name
-        """
+        """Send progress update via callback."""
         if self.progress_callback:
             self.progress_callback({
                 'message': message,
