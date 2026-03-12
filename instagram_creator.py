@@ -97,7 +97,6 @@ class InstagramCreator:
                     'error': str(e)
                 })
 
-            # Delay between accounts
             if i < self.config.num_accounts - 1:
                 delay = random.randint(
                     Config.MIN_DELAY_BETWEEN_ACCOUNTS,
@@ -163,7 +162,7 @@ class InstagramCreator:
             logger.info(f"   Fullname: {fullname}")
             logger.info(f"   Password: {'*' * len(password)}")
 
-            # Step 4: Navigate to Instagram
+            # Step 4: Navigate
             self._send_progress("🔗 Step 4/10: Opening Instagram...", step="navigate")
             logger.info("Step 4: Navigating to Instagram...")
             if not self._navigate_to_signup():
@@ -179,7 +178,7 @@ class InstagramCreator:
                 raise Exception("Failed to fill signup form")
             logger.info("✅ Form filled")
 
-            # Step 6: Captcha check
+            # Step 6: Captcha
             self._send_progress("🤖 Step 6/10: Checking for captcha...", step="captcha")
             logger.info("Step 6: Captcha check...")
             if self._check_for_captcha():
@@ -196,7 +195,7 @@ class InstagramCreator:
                 raise Exception("Form submission failed")
             logger.info("✅ Form submitted")
 
-            # Step 8: Verification code
+            # Step 8: Verification
             self._send_progress("📬 Step 8/10: Waiting for verification code...", step="verification")
             logger.info("Step 8: Waiting for verification code...")
             verification_code = self.email_manager.fetch_instagram_code(
@@ -204,7 +203,7 @@ class InstagramCreator:
                 timeout=Config.EMAIL_CHECK_TIMEOUT
             )
             if not verification_code:
-                logger.warning("⚠️ No verification code, trying resend...")
+                logger.warning("⚠️ No code, trying resend...")
                 self._click_resend_code()
                 verification_code = self.email_manager.fetch_instagram_code(
                     email_data,
@@ -212,7 +211,7 @@ class InstagramCreator:
                 )
             if not verification_code:
                 raise Exception("Verification code not received")
-            logger.info(f"✅ Verification code received: {verification_code}")
+            logger.info(f"✅ Code received: {verification_code}")
             if not self._enter_verification_code(verification_code):
                 raise Exception("Failed to enter verification code")
             logger.info("✅ Code entered")
@@ -224,7 +223,7 @@ class InstagramCreator:
                 raise Exception("Failed to set birthday")
             logger.info("✅ Birthday set")
 
-            # Step 10: Profile setup
+            # Step 10: Finalize
             self._send_progress("✨ Step 10/10: Finalizing account...", step="finalize")
             logger.info("Step 10: Profile setup...")
             if Config.ADD_PROFILE_PICTURE:
@@ -235,7 +234,6 @@ class InstagramCreator:
                 self._follow_suggested_accounts()
             logger.info("✅ Profile setup complete")
 
-            # Success
             account_data['success'] = True
             account_data['status'] = 'active'
             save_credentials(account_data)
@@ -266,7 +264,7 @@ class InstagramCreator:
             logger.info("BROWSER INIT - SYSTEM DEBUG")
             logger.info("=" * 50)
 
-            # ===== System info =====
+            # System info
             try:
                 result = subprocess.run(
                     ['uname', '-a'],
@@ -276,7 +274,6 @@ class InstagramCreator:
             except Exception as e:
                 logger.info(f"OS check failed: {e}")
 
-            # Chrome paths check
             for cmd in ['google-chrome', 'chromium', 'chromium-browser']:
                 try:
                     result = subprocess.run(
@@ -287,7 +284,6 @@ class InstagramCreator:
                 except Exception as e:
                     logger.info(f"which {cmd} failed: {e}")
 
-            # ChromeDriver check
             try:
                 result = subprocess.run(
                     ['which', 'chromedriver'],
@@ -297,7 +293,6 @@ class InstagramCreator:
             except Exception as e:
                 logger.info(f"which chromedriver failed: {e}")
 
-            # /usr/bin contents
             try:
                 result = subprocess.run(
                     'ls /usr/bin/ | grep -i chrom',
@@ -307,7 +302,6 @@ class InstagramCreator:
             except Exception as e:
                 logger.info(f"ls /usr/bin failed: {e}")
 
-            # /usr/local/bin contents
             try:
                 result = subprocess.run(
                     'ls /usr/local/bin/ | grep -i chrom',
@@ -317,14 +311,12 @@ class InstagramCreator:
             except Exception as e:
                 logger.info(f"ls /usr/local/bin failed: {e}")
 
-            # Environment variables
             logger.info(f"CHROME_BIN env: {os.getenv('CHROME_BIN', 'NOT SET')}")
             logger.info(f"CHROMEDRIVER_PATH env: {os.getenv('CHROMEDRIVER_PATH', 'NOT SET')}")
             logger.info("=" * 50)
 
-            # ===== Chrome binary খোঁজা =====
+            # Chrome binary
             chrome_bin = os.getenv('CHROME_BIN')
-
             if not chrome_bin or not os.path.exists(chrome_bin):
                 chrome_paths = [
                     '/usr/bin/google-chrome',
@@ -349,10 +341,8 @@ class InstagramCreator:
 
             if not chrome_bin:
                 logger.error("❌ Chrome binary NOT FOUND!")
-                logger.error("Fix: Add Chrome to Dockerfile or nixpacks.toml")
                 return False
 
-            # Chrome version
             try:
                 result = subprocess.run(
                     [chrome_bin, '--version'],
@@ -362,9 +352,8 @@ class InstagramCreator:
             except Exception as e:
                 logger.warning(f"Chrome version check failed: {e}")
 
-            # ===== ChromeDriver খোঁজা =====
+            # ChromeDriver
             driver_bin = os.getenv('CHROMEDRIVER_PATH')
-
             if not driver_bin or not os.path.exists(driver_bin):
                 driver_paths = [
                     '/usr/local/bin/chromedriver',
@@ -387,10 +376,8 @@ class InstagramCreator:
 
             if not driver_bin:
                 logger.error("❌ ChromeDriver NOT FOUND!")
-                logger.error("Fix: Add ChromeDriver to Dockerfile or nixpacks.toml")
                 return False
 
-            # ChromeDriver version
             try:
                 result = subprocess.run(
                     [driver_bin, '--version'],
@@ -400,12 +387,11 @@ class InstagramCreator:
             except Exception as e:
                 logger.warning(f"ChromeDriver version check failed: {e}")
 
-            # ===== Chrome Options =====
-            logger.info("Setting Chrome options...")
+            # Options
             options = Options()
             options.binary_location = chrome_bin
 
-            chrome_args = [
+            for arg in [
                 '--headless=new',
                 '--no-sandbox',
                 '--disable-dev-shm-usage',
@@ -426,9 +412,7 @@ class InstagramCreator:
                 '--ignore-certificate-errors',
                 '--allow-running-insecure-content',
                 f'--user-agent={generate_user_agent()}',
-            ]
-
-            for arg in chrome_args:
+            ]:
                 options.add_argument(arg)
 
             options.add_experimental_option(
@@ -438,30 +422,24 @@ class InstagramCreator:
                 'useAutomationExtension', False
             )
 
-            # ===== WebDriver তৈরি =====
+            # Create driver
             logger.info("Creating WebDriver instance...")
             service = Service(executable_path=driver_bin)
-
             self.driver = webdriver.Chrome(
                 service=service,
                 options=options
             )
 
-            # Timeouts
             self.driver.set_page_load_timeout(60)
             self.driver.implicitly_wait(10)
 
-            # Stealth injection
             self.driver.execute_script(
                 "Object.defineProperty(navigator, 'webdriver', "
                 "{get: () => undefined})"
             )
 
-            # Test
-            logger.info("Testing browser with about:blank...")
             self.driver.get("about:blank")
             logger.info(f"Test page title: '{self.driver.title}'")
-
             logger.info("✅ Browser initialized successfully!")
             return True
 
@@ -476,10 +454,15 @@ class InstagramCreator:
         try:
             logger.info(f"Opening URL: {Config.INSTAGRAM_SIGNUP_URL}")
             self.driver.get(Config.INSTAGRAM_SIGNUP_URL)
-            time.sleep(5)
+            time.sleep(8)
 
             logger.info(f"Page title: {self.driver.title}")
             logger.info(f"Current URL: {self.driver.current_url}")
+
+            # Page source preview
+            page_source = self.driver.page_source
+            logger.info(f"Page source length: {len(page_source)}")
+            logger.info(f"Page source preview: {page_source[:500]}")
 
             try:
                 self.driver.save_screenshot("/tmp/instagram_page.png")
@@ -487,12 +470,34 @@ class InstagramCreator:
             except Exception as e:
                 logger.warning(f"Screenshot failed: {e}")
 
+            # Instagram load check
+            if "instagram" not in self.driver.title.lower():
+                logger.warning(f"Unexpected title: {self.driver.title}")
+                logger.warning("Trying alternative URL...")
+                self.driver.get("https://www.instagram.com/accounts/emailsignup/")
+                time.sleep(8)
+                logger.info(f"Alt page title: {self.driver.title}")
+                logger.info(f"Alt URL: {self.driver.current_url}")
+
+            # Log all inputs
+            try:
+                all_inputs = self.driver.find_elements(By.TAG_NAME, "input")
+                logger.info(f"Found {len(all_inputs)} input fields:")
+                for inp in all_inputs:
+                    logger.info(
+                        f"  Input - name: {inp.get_attribute('name')}, "
+                        f"type: {inp.get_attribute('type')}, "
+                        f"placeholder: {inp.get_attribute('placeholder')}, "
+                        f"id: {inp.get_attribute('id')}"
+                    )
+            except Exception as e:
+                logger.warning(f"Input scan failed: {e}")
+
             self.driver.execute_script("window.scrollTo(0, 300);")
             random_delay(1, 2)
             self.driver.execute_script("window.scrollTo(0, 0);")
-            random_delay(2, 3)
+            random_delay(1, 2)
 
-            logger.info("Instagram page loaded successfully")
             return True
 
         except Exception as e:
@@ -505,35 +510,107 @@ class InstagramCreator:
         self, email: str, fullname: str,
         username: str, password: str
     ) -> bool:
-        """Fill the signup form with human-like behavior."""
+        """Fill the signup form."""
         try:
             wait = WebDriverWait(self.driver, 30)
 
-            # Email
-            logger.info("Filling email field...")
-            email_input = wait.until(
-                EC.presence_of_element_located((By.NAME, "emailOrPhone"))
-            )
+            # ===== Email =====
+            logger.info("Looking for email field...")
+            email_input = None
+            email_selectors = [
+                (By.NAME, "emailOrPhone"),
+                (By.NAME, "email"),
+                (By.XPATH, "//input[@type='email']"),
+                (By.XPATH, "//input[contains(@placeholder, 'email') or contains(@placeholder, 'Email')]"),
+                (By.XPATH, "//input[contains(@placeholder, 'Mobile') or contains(@placeholder, 'mobile')]"),
+                (By.XPATH, "//input[contains(@placeholder, 'Phone')]"),
+            ]
+
+            for by, selector in email_selectors:
+                try:
+                    email_input = wait.until(
+                        EC.presence_of_element_located((by, selector))
+                    )
+                    logger.info(f"✅ Email field found: {selector}")
+                    break
+                except TimeoutException:
+                    logger.warning(f"Email selector failed: {selector}")
+                    continue
+
+            if not email_input:
+                logger.error("❌ Email field NOT FOUND!")
+                all_inputs = self.driver.find_elements(By.TAG_NAME, "input")
+                logger.error(f"Available inputs ({len(all_inputs)}):")
+                for inp in all_inputs:
+                    logger.error(
+                        f"  name={inp.get_attribute('name')}, "
+                        f"type={inp.get_attribute('type')}, "
+                        f"placeholder={inp.get_attribute('placeholder')}, "
+                        f"id={inp.get_attribute('id')}"
+                    )
+                try:
+                    with open('/tmp/page_source.html', 'w') as f:
+                        f.write(self.driver.page_source)
+                    logger.info("Page source saved: /tmp/page_source.html")
+                except Exception:
+                    pass
+                return False
+
             self._human_type(email_input, email)
-            random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
-            logger.info(f"Email filled: {email}")
+            random_delay(1, 2)
+            logger.info(f"✅ Email filled: {email}")
 
-            # Full name
+            # ===== Full Name =====
             if fullname:
-                logger.info("Filling full name field...")
-                fullname_input = self.driver.find_element(By.NAME, "fullName")
-                self._human_type(fullname_input, fullname)
-                random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
-                logger.info(f"Fullname filled: {fullname}")
+                logger.info("Looking for fullname field...")
+                fullname_input = None
+                fullname_selectors = [
+                    (By.NAME, "fullName"),
+                    (By.NAME, "name"),
+                    (By.XPATH, "//input[contains(@placeholder, 'Full Name')]"),
+                    (By.XPATH, "//input[contains(@placeholder, 'full name')]"),
+                    (By.XPATH, "//input[contains(@placeholder, 'Name')]"),
+                ]
+                for by, selector in fullname_selectors:
+                    try:
+                        fullname_input = self.driver.find_element(by, selector)
+                        logger.info(f"✅ Fullname field found: {selector}")
+                        break
+                    except NoSuchElementException:
+                        continue
 
-            # Username
-            logger.info("Filling username field...")
-            username_input = self.driver.find_element(By.NAME, "username")
+                if fullname_input:
+                    self._human_type(fullname_input, fullname)
+                    random_delay(1, 2)
+                    logger.info(f"✅ Fullname filled: {fullname}")
+                else:
+                    logger.warning("⚠️ Fullname field not found, skipping...")
+
+            # ===== Username =====
+            logger.info("Looking for username field...")
+            username_input = None
+            username_selectors = [
+                (By.NAME, "username"),
+                (By.XPATH, "//input[contains(@placeholder, 'Username')]"),
+                (By.XPATH, "//input[contains(@placeholder, 'username')]"),
+                (By.XPATH, "//input[@autocomplete='username']"),
+            ]
+            for by, selector in username_selectors:
+                try:
+                    username_input = self.driver.find_element(by, selector)
+                    logger.info(f"✅ Username field found: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
+
+            if not username_input:
+                logger.error("❌ Username field NOT FOUND!")
+                return False
+
             self._human_type(username_input, username)
-            random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
-            logger.info(f"Username filled: {username}")
+            random_delay(2, 3)
+            logger.info(f"✅ Username filled: {username}")
 
-            # Username availability
             time.sleep(3)
             if not self._check_username_available():
                 logger.warning("Username not available, adding suffix...")
@@ -542,14 +619,32 @@ class InstagramCreator:
                 self._human_type(username_input, username)
                 random_delay(2, 3)
 
-            # Password
-            logger.info("Filling password field...")
-            password_input = self.driver.find_element(By.NAME, "password")
-            self._human_type(password_input, password)
-            random_delay(Config.MIN_FIELD_DELAY, Config.MAX_FIELD_DELAY)
-            logger.info("Password filled")
+            # ===== Password =====
+            logger.info("Looking for password field...")
+            password_input = None
+            password_selectors = [
+                (By.NAME, "password"),
+                (By.XPATH, "//input[@type='password']"),
+                (By.XPATH, "//input[contains(@placeholder, 'Password')]"),
+                (By.XPATH, "//input[contains(@placeholder, 'password')]"),
+            ]
+            for by, selector in password_selectors:
+                try:
+                    password_input = self.driver.find_element(by, selector)
+                    logger.info(f"✅ Password field found: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
 
-            logger.info("✅ Signup form filled successfully")
+            if not password_input:
+                logger.error("❌ Password field NOT FOUND!")
+                return False
+
+            self._human_type(password_input, password)
+            random_delay(1, 2)
+            logger.info("✅ Password filled")
+
+            logger.info("✅ Form filled successfully!")
             return True
 
         except Exception as e:
@@ -558,7 +653,7 @@ class InstagramCreator:
             traceback.print_exc()
             try:
                 self.driver.save_screenshot("/tmp/form_error.png")
-                logger.info("Error screenshot saved: /tmp/form_error.png")
+                logger.info("Error screenshot saved")
             except Exception:
                 pass
             return False
@@ -618,10 +713,25 @@ class InstagramCreator:
     def _submit_signup(self) -> bool:
         """Submit the signup form."""
         try:
-            submit_button = self.driver.find_element(
-                By.XPATH,
-                "//button[@type='submit' or contains(text(), 'Sign up')]"
-            )
+            submit_selectors = [
+                (By.XPATH, "//button[@type='submit']"),
+                (By.XPATH, "//button[contains(text(), 'Sign up')]"),
+                (By.XPATH, "//button[contains(text(), 'Next')]"),
+            ]
+
+            submit_button = None
+            for by, selector in submit_selectors:
+                try:
+                    submit_button = self.driver.find_element(by, selector)
+                    logger.info(f"Submit button found: {selector}")
+                    break
+                except NoSuchElementException:
+                    continue
+
+            if not submit_button:
+                logger.error("❌ Submit button NOT FOUND!")
+                return False
+
             self.driver.execute_script(
                 "arguments[0].scrollIntoView(true);", submit_button
             )
@@ -629,13 +739,6 @@ class InstagramCreator:
             submit_button.click()
             logger.info("Form submitted")
             random_delay(5, 8)
-
-            error_elements = self.driver.find_elements(
-                By.XPATH,
-                "//*[contains(@class, 'error') or contains(@id, 'error')]"
-            )
-            if error_elements:
-                logger.warning(f"Possible error after submit: {error_elements[0].text}")
 
             return True
 
@@ -653,7 +756,6 @@ class InstagramCreator:
                 EC.presence_of_all_elements_located((By.TAG_NAME, "input"))
             )
 
-            # 6 digit fields
             code_fields = [
                 inp for inp in all_inputs
                 if inp.get_attribute('maxlength') == '1'
@@ -692,12 +794,11 @@ class InstagramCreator:
     def _click_resend_code(self) -> None:
         """Click the resend code button."""
         try:
-            resend_button = self.driver.find_element(
-                By.XPATH,
-                "//button[contains(text(), 'Resend')]"
+            btn = self.driver.find_element(
+                By.XPATH, "//button[contains(text(), 'Resend')]"
             )
-            resend_button.click()
-            logger.info("Resend code clicked")
+            btn.click()
+            logger.info("Resend clicked")
             time.sleep(5)
         except Exception:
             pass
@@ -709,10 +810,10 @@ class InstagramCreator:
             birthday = generate_birthday()
             wait = WebDriverWait(self.driver, 20)
 
-            # Month
             month_select = wait.until(
                 EC.presence_of_element_located(
-                    (By.XPATH, "//select[@title='Month:' or @aria-label='Month']")
+                    (By.XPATH,
+                     "//select[@title='Month:' or @aria-label='Month']")
                 )
             )
             month_select.click()
@@ -722,7 +823,6 @@ class InstagramCreator:
             ).click()
             time.sleep(0.5)
 
-            # Day
             day_select = self.driver.find_element(
                 By.XPATH, "//select[@title='Day:' or @aria-label='Day']"
             )
@@ -733,7 +833,6 @@ class InstagramCreator:
             ).click()
             time.sleep(0.5)
 
-            # Year
             year_select = self.driver.find_element(
                 By.XPATH, "//select[@title='Year:' or @aria-label='Year']"
             )
@@ -744,7 +843,6 @@ class InstagramCreator:
             ).click()
             time.sleep(0.5)
 
-            # Next
             next_button = self.driver.find_element(
                 By.XPATH, "//button[contains(text(), 'Next')]"
             )
