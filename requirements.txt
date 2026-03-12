@@ -1,33 +1,5 @@
-# Telegram Bot Framework
 python-telegram-bot==20.7
-
-# Web Automation
-selenium==4.16.0
-undetected-chromedriver==3.5.4
-
-# HTTP Requests
+playwright==1.41.0
 requests==2.31.0
-aiohttp==3.9.1
-
-# HTML Parsing
-beautifulsoup4==4.12.2
-lxml==4.9.4
-
-# Security & Authentication
-pyotp==2.9.0
-cryptography==41.0.7
-
-# Image Processing
-Pillow==10.1.0
-
-# Environment Variables
+Pillow==10.2.0
 python-dotenv==1.0.0
-
-# User Agents
-fake-useragent==1.4.0
-
-# QR Code
-qrcode==7.4.2
-
-# Computer Vision (headless version)
-opencv-python-headless==4.8.1.78
