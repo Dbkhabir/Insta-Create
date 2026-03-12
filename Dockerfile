@@ -1,11 +1,13 @@
 FROM python:3.11-slim
 
+# System dependencies
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
     gnupg \
     ca-certificates \
     fonts-liberation \
+    fonts-unifont \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -44,8 +46,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Playwright - deps ছাড়া install করুন
 RUN playwright install chromium
-RUN playwright install-deps chromium
 
 COPY . .
 
