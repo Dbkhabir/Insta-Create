@@ -1,22 +1,18 @@
 """
-Instagram Account Creator Bot - Configuration
-Token: Hardcoded for Railway deployment
+Instagram Bot Configuration
 """
 
 import os
 import logging
 
-# Direct token configuration
+# Bot Token
 TELEGRAM_BOT_TOKEN = "8751410316:AAHl_ERIaqzVGuA77tyVBIFuZG18s3E--ME"
 
 
 class Config:
     """Configuration class."""
     
-    # Bot Token
     TELEGRAM_BOT_TOKEN: str = TELEGRAM_BOT_TOKEN
-    
-    # Other settings
     CAPTCHA_API_KEY: str = ""
     CAPTCHA_SERVICE: str = "2captcha"
     LOG_LEVEL: str = "INFO"
@@ -56,7 +52,7 @@ class Config:
     def validate(cls):
         if not cls.TELEGRAM_BOT_TOKEN:
             raise ValueError("Token missing!")
-        print(f"TOKEN FOUND: {cls.TELEGRAM_BOT_TOKEN[:30]}...")
+        print(f"TOKEN: {cls.TELEGRAM_BOT_TOKEN[:30]}...")
         return True
     
     @classmethod
@@ -76,7 +72,7 @@ class Config:
 
 Config.setup_logging()
 Config.create_directories()
-print("="*70)
-print("CONFIG LOADED - TOKEN HARDCODED")
+print("="*60)
+print("CONFIG LOADED")
 print(f"Token: {TELEGRAM_BOT_TOKEN}")
-print("="*70)
+print("="*60)
